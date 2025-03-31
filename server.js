@@ -77,7 +77,32 @@ async function extractPageSchema(url) {
     
     // Collect schema data
     const schema = {
-      title: $('title').text().trim(),
+      title: (function() {
+        // Get only the first title element
+        const titleElement = $('title').first();
+        let pageTitle = titleElement.length ? titleElement.text().trim() : '';
+        
+        // Clean up common patterns
+        if (pageTitle) {
+          // Handle "Main Title | Site Name" pattern
+          const titleParts = pageTitle.split(/\s+[|\-–—:]\s+/);
+          if (titleParts.length > 1) {
+            // Keep main title and site name if it's not too long
+            pageTitle = titleParts[0].trim();
+            if (titleParts[1].length < 30) {
+              pageTitle += " | " + titleParts[1].trim();
+            }
+          }
+          
+          // Remove common extraneous text
+          pageTitle = pageTitle.replace(/Search/g, '')
+                               .replace(/Do Not Sell/g, '')
+                               .replace(/\s{2,}/g, ' ')
+                               .trim();
+        }
+        
+        return pageTitle;
+      })(),
       description: $('meta[name="description"]').attr('content') || '',
       h1Tags: $('h1').length,
       h2Tags: $('h2').length,
@@ -104,7 +129,6 @@ async function extractPageSchema(url) {
                  .map((i, el) => $(el).text().trim())
                  .get()
                  .slice(0, 3),
-      metaKeywords: $('meta[name="keywords"]').attr('content') || '',
       firstParagraph: $('article p, [role="main"] p, .content p, .main p, main p').first().text().trim() || $('p').first().text().trim(),
       articleText: $('article, [role="main"], .content, .main, main')
                     .find('p')
@@ -114,70 +138,165 @@ async function extractPageSchema(url) {
                     .substring(0, 500) + '...',
       mainImageUrl: $('meta[property="og:image"]').attr('content') || 
                     $('article img, .content img, main img').first().attr('src') || '',
-      publishedDate: $('meta[property="article:published_time"]').attr('content') || 
-                     $('meta[itemprop="datePublished"]').attr('content') || 
-                     $('[itemprop="datePublished"]').attr('content') || 
-                     $('time[datetime]').first().attr('datetime') || '',
-               
-      modifiedDate: $('meta[property="article:modified_time"]').attr('content') || 
-                    $('meta[itemprop="dateModified"]').attr('content') || 
-                    $('[itemprop="dateModified"]').attr('content') || ''
+      publishedDate: (function() {
+        // Standard meta tags
+        let date = $('meta[property="article:published_time"]').attr('content') || 
+                   $('meta[itemprop="datePublished"]').attr('content') || 
+                   $('meta[name="publishdate"]').attr('content') || 
+                   $('meta[name="pubdate"]').attr('content') || 
+                   $('[itemprop="datePublished"]').attr('content') || 
+                   $('time[datetime]').first().attr('datetime');
+        
+        // Check for dates in JSON-LD structured data (most reliable)
+        if (!date) {
+          $('script[type="application/ld+json"]').each(function() {
+            try {
+              const text = $(this).html();
+              // Simple pattern matching rather than full JSON parsing
+              const match = text.match(/"datePublished"\s*:\s*"([^"]+)"/);
+              if (match && match[1]) {
+                date = match[1];
+                return false; // Break the loop
+              }
+            } catch (e) {}
+          });
+        }
+        
+        return date || '';
+      })(),
+
+      modifiedDate: (function() {
+        // Standard meta tags
+        let date = $('meta[property="article:modified_time"]').attr('content') || 
+                   $('meta[itemprop="dateModified"]').attr('content') || 
+                   $('meta[name="lastmod"]').attr('content') || 
+                   $('meta[name="last-modified"]').attr('content') || 
+                   $('[itemprop="dateModified"]').attr('content');
+        
+        // Check for dates in JSON-LD structured data (most reliable)
+        if (!date) {
+          $('script[type="application/ld+json"]').each(function() {
+            try {
+              const text = $(this).html();
+              // Simple pattern matching rather than full JSON parsing
+              const match = text.match(/"dateModified"\s*:\s*"([^"]+)"/);
+              if (match && match[1]) {
+                date = match[1];
+                return false; // Break the loop
+              }
+            } catch (e) {}
+          });
+        }
+        
+        // Check for any Next.js data script (used by many modern sites)
+        if (!date) {
+          const nextDataScript = $('script#__NEXT_DATA__').html();
+          if (nextDataScript) {
+            const match = nextDataScript.match(/"dateModified"\s*:\s*"([^"]+)"/);
+            if (match && match[1]) {
+              date = match[1];
+            }
+          }
+        }
+        
+        return date || '';
+      })(),
     };
     
     // Extract JSON-LD structured data
-    $('script[type="application/ld+json"]').each((i, el) => {
-      try {
-        schema.jsonLdData.push(JSON.parse($(el).html()));
-      } catch (e) {
-        // Skip invalid JSON
-      }
-    });
+    if ($('script[type="application/ld+json"]').length > 0) {
+      $('script[type="application/ld+json"]').each((i, el) => {
+        try {
+          const jsonData = JSON.parse($(el).html());
+          schema.jsonLdData.push(jsonData);
+          
+          // Process @graph structure if present
+          if (jsonData['@graph'] && Array.isArray(jsonData['@graph'])) {
+            jsonData['@graph'].forEach((item) => {
+              schema.jsonLdData.push(item);
+            });
+          }
+        } catch (e) {
+          console.log(`Error parsing JSON-LD: ${e.message}`);
+        }
+      });
+    }
     
-    // Extract specific schema properties from jsonLdData
+    // Try to extract schema properties from JSON-LD data
     let schemaProperties = {
+      type: '',
+      mainEntityOfPage: '',
       headline: '',
-      authors: [],
       datePublished: '',
-      publisher: '',
-      image: '',
-      articleBody: ''
+      dateModified: '',
+      description: '',
+      authors: [],
+      image: ''
     };
 
-    // Try to extract schema properties from JSON-LD data
     schema.jsonLdData.forEach(item => {
-      if (item['@type'] === 'Article' || item['@type'] === 'NewsArticle' || 
+      // Handle array format (CNN style)
+      if (Array.isArray(item)) {
+        item.forEach(subItem => {
+          extractProperties(subItem);
+        });
+      } else {
+        // Handle object format (Yahoo style)
+        extractProperties(item);
+      }
+    });
+
+    // Helper function to extract only the properties you want
+    function extractProperties(item) {
+      // Check for article types
+      if (item['@type'] === 'Article' || 
+          item['@type'] === 'NewsArticle' || 
           (Array.isArray(item['@type']) && 
-          (item['@type'].includes('Article') || item['@type'].includes('NewsArticle')))) {
+           (item['@type'].includes('Article') || item['@type'].includes('NewsArticle')))) {
         
+        // Extract only the specific properties you want
+        schemaProperties.type = item['@type'] || schemaProperties.type;
+        schemaProperties.mainEntityOfPage = item.mainEntityOfPage || schemaProperties.mainEntityOfPage;
         schemaProperties.headline = item.headline || schemaProperties.headline;
         schemaProperties.datePublished = item.datePublished || schemaProperties.datePublished;
-        schemaProperties.publisher = item.publisher?.name || 
-                                    (typeof item.publisher === 'string' ? item.publisher : '') || 
-                                    schemaProperties.publisher;
-        schemaProperties.image = item.image?.url || 
-                                (typeof item.image === 'string' ? item.image : '') || 
-                                schemaProperties.image;
-        schemaProperties.articleBody = item.articleBody || schemaProperties.articleBody;
+        schemaProperties.dateModified = item.dateModified || schemaProperties.dateModified;
+        schemaProperties.description = item.description || schemaProperties.description;
+        
+        // Handle image (could be string or object)
+        if (item.image) {
+          if (typeof item.image === 'string') {
+            schemaProperties.image = item.image;
+          } else if (item.image.url) {
+            schemaProperties.image = item.image.url;
+          }
+        }
         
         // Handle authors
         if (item.author) {
           if (Array.isArray(item.author)) {
-            const authorNames = item.author.map(a => a.name || (typeof a === 'string' ? a : '')).filter(Boolean);
-            schemaProperties.authors = [...schemaProperties.authors, ...authorNames];
+            // Process array of authors
+            item.author.forEach(author => {
+              const authorName = typeof author === 'string' ? author : author.name;
+              if (authorName && !schemaProperties.authors.includes(authorName)) {
+                schemaProperties.authors.push(authorName);
+              }
+            });
           } else {
-            const authorName = item.author.name || (typeof item.author === 'string' ? item.author : '');
-            if (authorName) {
+            // Process single author
+            const authorName = typeof item.author === 'string' ? item.author : item.author.name;
+            if (authorName && !schemaProperties.authors.includes(authorName)) {
               schemaProperties.authors.push(authorName);
             }
           }
         }
       }
-    });
+    }
 
     schema.schemaProperties = schemaProperties;
     
     return { success: true, schema };
   } catch (error) {
+    console.error(`Error extracting schema from URL: ${error.message}`);
     return { 
       success: false, 
       message: `Error extracting schema from URL: ${error.message}` 
@@ -408,6 +527,11 @@ app.post('/api/check-fidelity', async (req, res) => {
       canonicalSchemaResult.schema
     );
     
+    // Log before sending response
+    console.log("Sending schema data:");
+    console.log("Original schema properties:", originalSchemaResult.schema.schemaProperties);
+    console.log("Canonical schema properties:", canonicalSchemaResult.schema.schemaProperties);
+    
     // Return complete result
     return res.json({
       success: true,
@@ -434,5 +558,5 @@ app.get('/', (req, res) => {
 
 // Start the server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
