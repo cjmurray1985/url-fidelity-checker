@@ -224,6 +224,12 @@ async function extractPageSchema(url) {
                     .substring(0, 500) + '...',
       mainImageUrl: $('meta[property="og:image"]').attr('content') || 
                     $('article img, .content img, main img').first().attr('src') || '',
+      openGraph: {
+        title: $('meta[property="og:title"]').attr('content') || '',
+        description: $('meta[property="og:description"]').attr('content') || '',
+        image: $('meta[property="og:image"]').attr('content') || '',
+        type: $('meta[property="og:type"]').attr('content') || ''
+      },
       publishedDate: (function() {
         // Standard meta tags
         let date = $('meta[property="article:published_time"]').attr('content') || 

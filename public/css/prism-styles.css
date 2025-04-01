@@ -313,22 +313,34 @@ button {
   width: 50px;
   height: 50px;
   min-width: 50px;
-  background: var(--button-bg);
-  color: rgba(255, 255, 255, 0.95);
-  border: none;
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.4s ease;
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
   overflow: hidden;
-  /* Enhance with border for better visibility */
-  border: 2px solid transparent;
+  padding: 0;
+  border: none;
+  /* Create a solid background as fallback */
+  background-color: rgba(95, 1, 209, 0.8);
+}
+
+/* Use a pseudo-element for the gradient to ensure complete coverage */
+button::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--button-bg);
+  border-radius: 50%;
+  z-index: 0;
 }
 
 button:before {
@@ -345,7 +357,8 @@ button:before {
   );
   transform: translateX(-100%);
   animation: shimmer 3s infinite;
-  z-index: 1;
+  z-index: 2;
+  border-radius: 50%;
 }
 
 button svg {
@@ -356,7 +369,7 @@ button svg {
   stroke-width: 2;
   transition: all 0.3s ease;
   position: relative;
-  z-index: 2;
+  z-index: 3;
 }
 
 button:hover {
@@ -751,6 +764,22 @@ footer {
   font-weight: 300;
   letter-spacing: 0.5px;
   z-index: 1;
+}
+
+/* Add skip link styling to hide it until focused */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--accent-purple);
+  color: white;
+  padding: 8px;
+  z-index: 100;
+  transition: top 0.3s;
+}
+
+.skip-link:focus {
+  top: 0;
 }
 
 @media (max-height: 700px) {

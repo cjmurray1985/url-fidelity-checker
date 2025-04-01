@@ -1,76 +1,8 @@
-// Set initial theme based on user preference or system settings
-function setInitialTheme() {
-  const savedTheme = localStorage.getItem('theme');
-  const manuallySet = localStorage.getItem('theme_manually_set');
-  
-  if (savedTheme && manuallySet) {
-    // Use saved preference if manually set by user
-    document.documentElement.setAttribute('data-theme', savedTheme);
-  } else {
-    // Check for system preference, default to dark if not available
-    const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
-    const systemTheme = prefersDarkScheme.matches ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', systemTheme);
-    
-    // Save the system preference but don't mark as manually set
-    localStorage.setItem('theme', systemTheme);
-    // Clear the manually set flag if it exists
-    if (manuallySet) {
-      localStorage.removeItem('theme_manually_set');
-    }
-  }
-}
-
-// Call this before DOM content loaded to prevent flash of wrong theme
-setInitialTheme();
-
+// Dark mode is now hardcoded in HTML, no need for theme detection
 document.addEventListener('DOMContentLoaded', () => {
-  // Theme toggle functionality
-  const themeToggle = document.querySelector('.theme-toggle');
-  
   // Apply theme transition class to smooth color changes
   document.body.classList.add('theme-transition');
   document.querySelector('html').classList.add('theme-transition');
-  
-  // Update theme toggle button label based on current theme
-  function updateThemeToggleLabel() {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    themeToggle.setAttribute('aria-label', `Switch to ${newTheme} mode`);
-  }
-  
-  // Call initially to set correct label
-  updateThemeToggleLabel();
-  
-  // Theme toggle event listener
-  themeToggle.addEventListener('click', () => {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    
-    // Update the theme attribute
-    document.documentElement.setAttribute('data-theme', newTheme);
-    
-    // Save preference to localStorage with a special flag to indicate manual selection
-    localStorage.setItem('theme', newTheme);
-    localStorage.setItem('theme_manually_set', 'true');
-    
-    // Update the aria-label for the toggle button
-    updateThemeToggleLabel();
-  });
-  
-  // Listen for system preference changes if the user hasn't manually set a preference
-  const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
-  prefersDarkScheme.addEventListener('change', (e) => {
-    // Only change the theme if the user hasn't manually set a preference
-    if (!localStorage.getItem('theme_manually_set')) {
-      const systemTheme = e.matches ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', systemTheme);
-      localStorage.setItem('theme', systemTheme);
-      
-      // Update toggle button label
-      updateThemeToggleLabel();
-    }
-  });
   
   // DOM Elements
   const urlForm = document.getElementById('url-form');
@@ -349,83 +281,169 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   // Helper function to compare texts with word overlap
-  function compareTexts(text1, text2) {
-    if (!text1 || !text2) return { match: false, score: 0, message: "Missing Content" };
+  function compareTexts(text1, text2, ogText1, ogText2) {
+    // Handle null/undefined values
+    if (!text1 && !text2) return { match: true, score: 1, message: "Both missing" };
     
-    // Check for exact match
-    if (text1 === text2) return { match: true, score: 1, message: "Exact Match" };
+    // If original has text but canonical doesn't, consider it a match (per requirement #2)
+    if (text1 && !text2) return { match: true, score: 1, message: "Canonical text missing (ignored)" };
     
-    // Normalize both texts (lowercase, remove extra whitespace)
-    const normalize = (text) => {
-      // Ensure text is a string
-      text = String(text || '');
-      return text.toLowerCase().replace(/\s+/g, ' ').trim();
+    // Only case we consider a mismatch is if canonical has text but original doesn't
+    if (!text1 && text2) return { match: false, score: 0, message: "Original text missing" };
+    
+    // Clean and normalize texts
+    const cleanText = (text) => {
+      if (!text) return '';
+      return text.toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
     };
     
-    const normalizedText1 = normalize(text1);
-    const normalizedText2 = normalize(text2);
+    const clean1 = cleanText(text1);
+    const clean2 = cleanText(text2);
     
-    // Check normalized match
-    if (normalizedText1 === normalizedText2) 
-      return { match: true, score: 1, message: "Normalized Match" };
+    // Also clean OG texts if available
+    const cleanOg1 = ogText1 ? cleanText(ogText1) : null;
+    const cleanOg2 = ogText2 ? cleanText(ogText2) : null;
     
-    // Calculate word overlap
-    const words1 = normalizedText1.split(' ');
-    const words2 = normalizedText2.split(' ');
-    
-    const uniqueWords1 = new Set(words1);
-    const uniqueWords2 = new Set(words2);
-    
-    let sharedWords = 0;
-    uniqueWords1.forEach(word => {
-      if (uniqueWords2.has(word)) sharedWords++;
-    });
-    
-    const totalUniqueWords = new Set([...uniqueWords1, ...uniqueWords2]).size;
-    const overlapScore = sharedWords / totalUniqueWords;
-    
-    // Calculate Jaccard similarity (intersection / union)
-    const jaccardSimilarity = sharedWords / (uniqueWords1.size + uniqueWords2.size - sharedWords);
-    
-    // Check if one contains the other
-    const containment = normalizedText1.includes(normalizedText2) || normalizedText2.includes(normalizedText1);
-    
-    if (jaccardSimilarity > 0.8 || containment) {
-      return { 
-        match: true, 
-        score: jaccardSimilarity, 
-        message: `Similar Content (${Math.round(jaccardSimilarity * 100)}%)` 
-      };
-    } else if (jaccardSimilarity > 0.5) {
-      return { 
-        match: 'partial', 
-        score: jaccardSimilarity, 
-        message: `Partial Match (${Math.round(jaccardSimilarity * 100)}%)` 
-      };
+    // Check for exact matches between any combination of texts and OG texts
+    if (clean1 === clean2) {
+      return { match: true, score: 1, message: "Exact match" };
     }
     
-    return { 
-      match: false, 
-      score: jaccardSimilarity,
-      message: `Low Similarity (${Math.round(jaccardSimilarity * 100)}%)` 
+    // Check if OG texts match each other
+    if (cleanOg1 && cleanOg2 && cleanOg1 === cleanOg2) {
+      return { match: true, score: 1, message: "OG texts match exactly" };
+    }
+    
+    // Check if text matches OG text of the other page
+    if (clean1 && cleanOg2 && clean1 === cleanOg2) {
+      return { match: true, score: 1, message: "Text matches OG text exactly" };
+    }
+    
+    if (clean2 && cleanOg1 && clean2 === cleanOg1) {
+      return { match: true, score: 1, message: "Text matches OG text exactly" };
+    }
+    
+    // Calculate word-based similarity
+    const calculateWordSimilarity = (str1, str2) => {
+      if (!str1 || !str2) return 0;
+      
+      const words1 = str1.split(' ').filter(w => w.length > 2);
+      const words2 = str2.split(' ').filter(w => w.length > 2);
+      
+      if (words1.length === 0 || words2.length === 0) return 0;
+      
+      // Count words that appear in both texts
+      const matchingWords = words1.filter(word => words2.includes(word));
+      const uniqueWords = [...new Set([...words1, ...words2])];
+      
+      return matchingWords.length / uniqueWords.length;
     };
+    
+    // Calculate similarity between all combinations of texts
+    const similarities = [
+      { type: "Main texts", similarity: calculateWordSimilarity(clean1, clean2) },
+    ];
+    
+    // Add OG text similarities if available
+    if (cleanOg1 && cleanOg2) {
+      similarities.push({ type: "OG texts", similarity: calculateWordSimilarity(cleanOg1, cleanOg2) });
+    }
+    if (clean1 && cleanOg2) {
+      similarities.push({ type: "Text to OG", similarity: calculateWordSimilarity(clean1, cleanOg2) });
+    }
+    if (clean2 && cleanOg1) {
+      similarities.push({ type: "OG to Text", similarity: calculateWordSimilarity(clean2, cleanOg1) });
+    }
+    
+    // Sort by similarity (highest first)
+    similarities.sort((a, b) => b.similarity - a.similarity);
+    
+    // Use the highest similarity score
+    const bestMatch = similarities[0];
+    
+    if (bestMatch.similarity >= 0.8) {
+      return { 
+        match: true, 
+        score: bestMatch.similarity, 
+        message: `${bestMatch.type}: High similarity (${Math.round(bestMatch.similarity * 100)}%)` 
+      };
+    } else if (bestMatch.similarity >= 0.5) {
+      return { 
+        match: 'partial', 
+        score: bestMatch.similarity, 
+        message: `${bestMatch.type}: Moderate similarity (${Math.round(bestMatch.similarity * 100)}%)` 
+      };
+    } else {
+      return { 
+        match: false, 
+        score: bestMatch.similarity, 
+        message: `${bestMatch.type}: Low similarity (${Math.round(bestMatch.similarity * 100)}%)` 
+      };
+    }
   }
   
-  // Helper function to compare titles with site name awareness
-  function compareTitles(title1, title2) {
-    if (!title1 || !title2) return { match: false, score: 0, message: "Missing Title" };
+  // Helper function to compare titles with site name awareness and OG Title integration
+  function compareTitles(title1, title2, ogTitle1, ogTitle2) {
+    // Handle null/undefined values
+    if (!title1 && !title2) return { match: true, score: 1, message: "Both titles missing" };
     
-    // Check for exact match
-    if (title1 === title2) return { match: true, score: 1, message: "Exact Match" };
+    // If original has title but canonical doesn't, consider it a match (per requirement #2)
+    if (title1 && !title2) return { match: true, score: 1, message: "Canonical title missing (ignored)" };
+    
+    // Only case we consider a mismatch is if canonical has title but original doesn't
+    if (!title1 && title2) return { match: false, score: 0, message: "Original title missing" };
     
     // Clean titles - remove common separators and site names
     const cleanTitle = (title) => {
+      if (!title) return '';
+      
       // Common patterns: " - Site Name", " | Site Name", ": Site Name"
-      return title.replace(/(\s[-|:]\s.*$)|(\s[-|:]\s.*$)/g, '').trim();
+      let cleaned = title.replace(/(\s[-|:]\s.*$)|(\s[-|:]\s.*$)/g, '').trim();
+      
+      // Additional site name patterns to remove
+      const sitePatterns = [
+        /\s*[-|]\s*[^-|]*\.(com|org|net|io|co|gov)$/i,
+        /\s*[-|]\s*[A-Za-z0-9 ]+(News|Times|Post|Herald|Journal|Chronicle|Gazette|Tribune|Daily|Yahoo|CNN|BBC|NBC|CBS|Fox|Reuters|Bloomberg)$/i,
+        /\s*[-|]\s*Yahoo\s*$/i,
+        /\s*[-|]\s*Yahoo Finance\s*$/i,
+        /\s*[-|]\s*Yahoo News\s*$/i,
+        /\s*[-|]\s*Yahoo Sports\s*$/i
+      ];
+      
+      sitePatterns.forEach(pattern => {
+        cleaned = cleaned.replace(pattern, '');
+      });
+      
+      return cleaned.trim();
     };
     
     const cleanTitle1 = cleanTitle(title1);
     const cleanTitle2 = cleanTitle(title2);
+    
+    // Also clean OG titles if available, using the same site name exclusion logic
+    const cleanOgTitle1 = ogTitle1 ? cleanTitle(ogTitle1) : null;
+    const cleanOgTitle2 = ogTitle2 ? cleanTitle(ogTitle2) : null;
+    
+    // Check for exact matches between any combination of titles and OG titles
+    if (cleanTitle1 === cleanTitle2) {
+      return { match: true, score: 1, message: "Page titles match (excluding site names)" };
+    }
+    
+    // Check if OG titles match each other
+    if (cleanOgTitle1 && cleanOgTitle2 && cleanOgTitle1 === cleanOgTitle2) {
+      return { match: true, score: 1, message: "OG titles match (excluding site names)" };
+    }
+    
+    // Check if page title matches OG title of the other page
+    if (cleanTitle1 && cleanOgTitle2 && cleanTitle1 === cleanOgTitle2) {
+      return { match: true, score: 1, message: "Page title matches OG title (excluding site names)" };
+    }
+    
+    if (cleanTitle2 && cleanOgTitle1 && cleanTitle2 === cleanOgTitle1) {
+      return { match: true, score: 1, message: "Page title matches OG title (excluding site names)" };
+    }
     
     // Calculate similarity score for cleaned titles
     const calculateSimilarity = (str1, str2) => {
@@ -447,30 +465,54 @@ document.addEventListener('DOMContentLoaded', () => {
       return matchingWords / Math.min(words1.length, words2.length);
     };
     
-    // Check if cleaned titles match - now considered a full match per requirements
-    if (cleanTitle1 === cleanTitle2) {
-      return { match: true, score: 1, message: "Matches (excluding site names)" };
+    // Calculate similarity between all combinations of titles
+    const similarities = [
+      { type: "Page titles", similarity: calculateSimilarity(cleanTitle1, cleanTitle2) },
+    ];
+    
+    // Add OG title similarities if available
+    if (cleanOgTitle1 && cleanOgTitle2) {
+      similarities.push({ type: "OG titles", similarity: calculateSimilarity(cleanOgTitle1, cleanOgTitle2) });
+    }
+    if (cleanTitle1 && cleanOgTitle2) {
+      similarities.push({ type: "Page to OG", similarity: calculateSimilarity(cleanTitle1, cleanOgTitle2) });
+    }
+    if (cleanTitle2 && cleanOgTitle1) {
+      similarities.push({ type: "OG to Page", similarity: calculateSimilarity(cleanTitle2, cleanOgTitle1) });
     }
     
-    // Calculate similarity between cleaned titles
-    const similarity = calculateSimilarity(cleanTitle1, cleanTitle2);
+    // Sort by similarity (highest first)
+    similarities.sort((a, b) => b.similarity - a.similarity);
     
-    if (similarity >= 0.7) {
+    // Use the highest similarity score
+    const bestMatch = similarities[0];
+    
+    if (bestMatch.similarity >= 0.7) {
       // High similarity (70% or more matching words)
-      return { match: true, score: 0.9, message: `High similarity (${Math.round(similarity * 100)}%)` };
-    } else if (similarity >= 0.5) {
+      return { 
+        match: true, 
+        score: 0.9, 
+        message: `${bestMatch.type}: High similarity (${Math.round(bestMatch.similarity * 100)}%)` 
+      };
+    } else if (bestMatch.similarity >= 0.5) {
       // Moderate similarity (50-70% matching words)
-      return { match: 'partial', score: 0.7, message: `Moderate similarity (${Math.round(similarity * 100)}%)` };
-    } else if (cleanTitle1.includes(cleanTitle2) || cleanTitle2.includes(cleanTitle1)) {
+      return { 
+        match: 'partial', 
+        score: 0.7, 
+        message: `${bestMatch.type}: Moderate similarity (${Math.round(bestMatch.similarity * 100)}%)` 
+      };
+    } else if (cleanTitle1.includes(cleanTitle2) || cleanTitle2.includes(cleanTitle1) || 
+              (cleanOgTitle1 && cleanOgTitle1.includes(cleanTitle2)) || 
+              (cleanOgTitle2 && cleanOgTitle2.includes(cleanTitle1))) {
       // One title contains the other but low word similarity
       return { match: 'partial', score: 0.5, message: "One title contains the other" };
     }
     
     // Low similarity - use the more sophisticated text comparison as fallback
-    const textComparison = compareTexts(cleanTitle1, cleanTitle2);
+    const textComparison = compareTexts(cleanTitle1, cleanTitle2, cleanOgTitle1, cleanOgTitle2);
     if (textComparison.match === 'partial' && textComparison.score < 0.5) {
       // Override low partial matches to be mismatches
-      return { match: false, score: textComparison.score, message: `Low similarity (${Math.round(similarity * 100)}%)` };
+      return { match: false, score: textComparison.score, message: `Low similarity (${Math.round(bestMatch.similarity * 100)}%)` };
     }
     
     return textComparison;
@@ -478,7 +520,14 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Helper function to compare image URLs
   function compareImageUrls(url1, url2) {
-    if (!url1 || !url2) return { match: false, message: "Missing Image" };
+    // If both are missing, it's a match
+    if (!url1 && !url2) return { match: true, message: "Both images missing" };
+    
+    // If original has image but canonical doesn't, consider it a match (per requirement #2)
+    if (url1 && !url2) return { match: true, message: "Canonical image missing (ignored)" };
+    
+    // Only case we consider a mismatch is if canonical has image but original doesn't
+    if (!url1 && url2) return { match: false, message: "Original image missing" };
     
     // Always return true for now, as we're acknowledging 
     // that images come from different domains and will have different names
@@ -505,7 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Special display function for Yahoo Finance URLs
   function showFinanceResult(data) {
-    // Simple UI to just show the canonical URL for Yahoo Finance articles
+    // Simple UI to just show the canonical URL for Yahoo Finance
     
     // Reset UI first
     resetUI();
@@ -563,24 +612,63 @@ document.addEventListener('DOMContentLoaded', () => {
     populateComparisonTable(data);
     
     // Set comparison details
-    setComparisonResult(titleMatch, data.fidelityDetails.comparisons.title);
-    setComparisonResult(descriptionMatch, data.fidelityDetails.comparisons.description);
+    setComparisonResult(titleMatch, compareTitles(data.originalSchema.title, data.canonicalSchema.title, data.originalSchema.openGraph?.title, data.canonicalSchema.openGraph?.title));
+    setComparisonResult(descriptionMatch, compareTexts(data.originalSchema.description, data.canonicalSchema.description, data.originalSchema.openGraph?.description, data.canonicalSchema.openGraph?.description));
     
     // Use the date comparison results from the table for the date card
     let dateMatchStatus = data.fidelityDetails.comparisons.date;
-    if (window.dateComparisonResults && 
-        window.dateComparisonResults.publishedDate === true && 
-        window.dateComparisonResults.modifiedDate === true) {
-      // If both dates have exact matches in the table, override the server's date match status
-      dateMatchStatus = true;
-    } else if (window.dateComparisonResults && 
-              (window.dateComparisonResults.publishedDate === true || 
-               window.dateComparisonResults.modifiedDate === true)) {
-      // If at least one date has an exact match, consider it a match
-      dateMatchStatus = true;
+    
+    // Initialize dateComparisonResults if not already done
+    if (!window.dateComparisonResults) {
+      window.dateComparisonResults = {
+        publishedDate: false,
+        modifiedDate: false
+      };
     }
     
+    if (window.dateComparisonResults) {
+      if (window.dateComparisonResults.publishedDate === true && 
+          window.dateComparisonResults.modifiedDate === true) {
+        // If both dates have exact matches in the table, override the server's date match status
+        dateMatchStatus = true;
+      } else if (window.dateComparisonResults.publishedDate === 'partial' || 
+                window.dateComparisonResults.modifiedDate === 'partial') {
+        // If either date has a partial match, show partial match in the summary
+        dateMatchStatus = 'partial';
+      } else if (window.dateComparisonResults.publishedDate === true || 
+                window.dateComparisonResults.modifiedDate === true) {
+        // If at least one date has an exact match and none are partial, consider it a match
+        dateMatchStatus = true;
+      }
+    }
+    
+    // Create a detailed message for the date tooltip
+    let dateTooltip = '';
+    if (window.dateComparisonResults) {
+      if (window.dateComparisonResults.publishedDate === true) {
+        dateTooltip += 'Published Date: Match\n';
+      } else if (window.dateComparisonResults.publishedDate === 'partial') {
+        dateTooltip += 'Published Date: Partial Match\n';
+      } else if (window.dateComparisonResults.publishedDate === false) {
+        dateTooltip += 'Published Date: Mismatch\n';
+      }
+      
+      if (window.dateComparisonResults.modifiedDate === true) {
+        dateTooltip += 'Modified Date: Match';
+      } else if (window.dateComparisonResults.modifiedDate === 'partial') {
+        dateTooltip += 'Modified Date: Partial Match';
+      } else if (window.dateComparisonResults.modifiedDate === false) {
+        dateTooltip += 'Modified Date: Mismatch';
+      }
+    }
+    
+    // Set the date comparison result with tooltip
     setComparisonResult(dateMatch, dateMatchStatus);
+    if (dateTooltip) {
+      dateMatch.setAttribute('title', dateTooltip);
+      dateMatch.style.cursor = 'help';
+    }
+    
     setComparisonResult(authorMatch, data.fidelityDetails.comparisons.author);
     
     // Content volume is a ratio, so we need a different approach
@@ -637,7 +725,39 @@ document.addEventListener('DOMContentLoaded', () => {
   function setComparisonResult(element, isMatch) {
     element.className = 'comparison-result';
     
-    if (isMatch === true) {
+    // Handle when isMatch is an object (from compareTitles or compareTexts)
+    if (isMatch && typeof isMatch === 'object') {
+      if (isMatch.match === true) {
+        element.classList.add('match');
+        element.textContent = 'Match';
+        
+        // Add tooltip with more details if available
+        if (isMatch.message) {
+          element.setAttribute('title', isMatch.message);
+          element.style.cursor = 'help';
+        }
+      } else if (isMatch.match === 'partial') {
+        element.classList.add('partial');
+        element.textContent = 'Partial Match';
+        
+        // Add tooltip with more details if available
+        if (isMatch.message) {
+          element.setAttribute('title', isMatch.message);
+          element.style.cursor = 'help';
+        }
+      } else {
+        element.classList.add('mismatch');
+        element.textContent = 'Mismatch';
+        
+        // Add tooltip with more details if available
+        if (isMatch.message) {
+          element.setAttribute('title', isMatch.message);
+          element.style.cursor = 'help';
+        }
+      }
+    }
+    // Handle when isMatch is a boolean or string
+    else if (isMatch === true) {
       element.classList.add('match');
       element.textContent = 'Match';
     } else if (isMatch === 'partial') {
@@ -722,7 +842,7 @@ document.addEventListener('DOMContentLoaded', () => {
     addTextComparisonRow('Main Heading (H1)', originalSchema.h1Content, canonicalSchema.h1Content);
     
     // Add Meta Description comparison
-    addTextComparisonRow('Meta Description', originalSchema.description, canonicalSchema.description);
+    addTextComparisonRow('Meta Description', originalSchema.description, canonicalSchema.description, null, originalSchema.openGraph?.description, canonicalSchema.openGraph?.description);
     
     // Modified code - only show regular published and modified dates
     addDateComparisonRow('Published Date', originalSchema.publishedDate, canonicalSchema.publishedDate);
@@ -741,14 +861,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add Schema Property comparisons
     addSchemaPropertyComparisons();
     
+    // Add Open Graph metadata comparison
+    addOpenGraphComparison();
+    
     // Helper function to add a text comparison row
-    function addTextComparisonRow(element, originalContent, canonicalContent, isLongText = false) {
+    function addTextComparisonRow(element, originalContent, canonicalContent, isLongText = false, ogOriginalContent, ogCanonicalContent) {
       if (!originalContent && !canonicalContent) return;
       
       const row = document.createElement('tr');
       
       // Use the enhanced text comparison function
-      const textComparison = compareTexts(originalContent, canonicalContent);
+      const textComparison = compareTexts(originalContent, canonicalContent, ogOriginalContent, ogCanonicalContent);
       
       // Create cells with width constraints
       const elementCell = document.createElement('td');
@@ -811,7 +934,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const originalTitle = originalSchema.title;
       const canonicalTitle = canonicalSchema.title;
       
-      const titleComparison = compareTitles(originalTitle, canonicalTitle);
+      const titleComparison = compareTitles(originalTitle, canonicalTitle, originalSchema.openGraph?.title, canonicalSchema.openGraph?.title);
       
       const row = document.createElement('tr');
       
@@ -823,18 +946,26 @@ document.addEventListener('DOMContentLoaded', () => {
       const originalCell = document.createElement('td');
       originalCell.style.width = "35%";
       originalCell.className = 'truncate expand-content';
-      originalCell.textContent = originalTitle || 'Not found';
-      originalCell.addEventListener('click', function() {
-        row.classList.toggle('expanded');
-      });
+      if (originalTitle) {
+        originalCell.textContent = originalTitle;
+        originalCell.addEventListener('click', function() {
+          row.classList.toggle('expanded');
+        });
+      } else {
+        originalCell.textContent = 'Not found';
+      }
       
       const canonicalCell = document.createElement('td');
       canonicalCell.style.width = "35%";
       canonicalCell.className = 'truncate expand-content';
-      canonicalCell.textContent = canonicalTitle || 'Not found';
-      canonicalCell.addEventListener('click', function() {
-        row.classList.toggle('expanded');
-      });
+      if (canonicalTitle) {
+        canonicalCell.textContent = canonicalTitle;
+        canonicalCell.addEventListener('click', function() {
+          row.classList.toggle('expanded');
+        });
+      } else {
+        canonicalCell.textContent = 'Not found';
+      }
       
       const statusCell = document.createElement('td');
       statusCell.style.width = "10%";
@@ -895,7 +1026,19 @@ document.addEventListener('DOMContentLoaded', () => {
       
       let matchStatus = false;
       
-      if (!originalDate || !canonicalDate) {
+      // If original has date but canonical doesn't, consider it a match (per requirement #2)
+      if (originalDate && !canonicalDate) {
+        statusCell.className = 'status-match';
+        statusCell.textContent = 'Canonical missing (ignored)';
+        matchStatus = true;
+      }
+      // Only case we consider a mismatch is if canonical has date but original doesn't
+      else if (!originalDate && canonicalDate) {
+        statusCell.className = 'status-mismatch';
+        statusCell.textContent = 'Original missing';
+        matchStatus = false;
+      }
+      else if (!originalDate || !canonicalDate) {
         statusCell.className = 'status-mismatch';
         statusCell.textContent = 'Missing Date';
         matchStatus = false;
@@ -990,10 +1133,28 @@ document.addEventListener('DOMContentLoaded', () => {
       originalCell.className = 'truncate expand-content';
       if (originalImage) {
         try {
-          const imgPreview = document.createElement('div');
-          imgPreview.style.marginBottom = '5px';
-          imgPreview.innerHTML = `<img src="${originalImage}" alt="Preview" style="max-width: 100px; max-height: 60px;">`;
-          originalCell.appendChild(imgPreview);
+          const imgContainer = document.createElement('div');
+          imgContainer.style.marginBottom = '10px';
+          
+          // Create a clickable image with larger dimensions
+          const imgLink = document.createElement('a');
+          imgLink.href = originalImage;
+          imgLink.target = "_blank";
+          imgLink.rel = "noopener noreferrer";
+          imgLink.title = "Click to open image in new tab";
+          
+          const img = document.createElement('img');
+          img.src = originalImage;
+          img.alt = "Preview";
+          img.style.maxWidth = "200px"; 
+          img.style.maxHeight = "120px"; 
+          img.style.cursor = "pointer";
+          img.style.borderRadius = "4px";
+          img.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.2)";
+          
+          imgLink.appendChild(img);
+          imgContainer.appendChild(imgLink);
+          originalCell.appendChild(imgContainer);
           originalCell.appendChild(document.createTextNode(originalImage));
         } catch (e) {
           originalCell.textContent = originalImage;
@@ -1007,10 +1168,28 @@ document.addEventListener('DOMContentLoaded', () => {
       canonicalCell.className = 'truncate expand-content';
       if (canonicalImage) {
         try {
-          const imgPreview = document.createElement('div');
-          imgPreview.style.marginBottom = '5px';
-          imgPreview.innerHTML = `<img src="${canonicalImage}" alt="Preview" style="max-width: 100px; max-height: 60px;">`;
-          canonicalCell.appendChild(imgPreview);
+          const imgContainer = document.createElement('div');
+          imgContainer.style.marginBottom = '10px';
+          
+          // Create a clickable image with larger dimensions
+          const imgLink = document.createElement('a');
+          imgLink.href = canonicalImage;
+          imgLink.target = "_blank";
+          imgLink.rel = "noopener noreferrer";
+          imgLink.title = "Click to open image in new tab";
+          
+          const img = document.createElement('img');
+          img.src = canonicalImage;
+          img.alt = "Preview";
+          img.style.maxWidth = "200px"; 
+          img.style.maxHeight = "120px"; 
+          img.style.cursor = "pointer";
+          img.style.borderRadius = "4px";
+          img.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.2)";
+          
+          imgLink.appendChild(img);
+          imgContainer.appendChild(imgLink);
+          canonicalCell.appendChild(imgContainer);
           canonicalCell.appendChild(document.createTextNode(canonicalImage));
         } catch (e) {
           canonicalCell.textContent = canonicalImage;
@@ -1071,13 +1250,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // Define properties to compare
       const props = [
         { name: 'Schema Type', key: 'type' },
-        { name: 'Schema Main Entity', key: 'mainEntityOfPage' },
         { name: 'Schema Headline', key: 'headline' },
         { name: 'Schema Published Date', key: 'datePublished', isDate: true },
         { name: 'Schema Modified Date', key: 'dateModified', isDate: true },
         { name: 'Schema Description', key: 'description' },
-        { name: 'Schema Authors', key: 'authors', isArray: true },
-        { name: 'Schema Image', key: 'image', isImage: true }
+        { name: 'Schema Authors', key: 'authors', isArray: true }
       ];
       
       // Process each property
@@ -1101,9 +1278,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (prop.isDate) {
           // Date comparison
           addDateComparisonRow(prop.name, originalValue, canonicalValue);
-        } else if (prop.isImage) {
-          // Image comparison with preview
-          addImageSchemaComparisonRow(prop.name, originalValue, canonicalValue);
         } else {
           // Regular text comparison
           addTextComparisonRow(prop.name, originalValue, canonicalValue);
@@ -1111,8 +1285,123 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
     
-    // Add image schema comparison row with preview
-    function addImageSchemaComparisonRow(label, originalImage, canonicalImage) {
+    // Add Open Graph metadata comparison
+    function addOpenGraphComparison() {
+      // Skip if both don't have any OG data
+      if ((!originalSchema.openGraph || Object.keys(originalSchema.openGraph).length === 0) && 
+          (!canonicalSchema.openGraph || Object.keys(canonicalSchema.openGraph).length === 0)) {
+        return;
+      }
+      
+      // Add a header row for Open Graph data
+      const headerRow = document.createElement('tr');
+      const headerCell = document.createElement('td');
+      headerCell.colSpan = 4;
+      headerCell.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+      headerCell.style.color = 'rgba(255, 255, 255, 0.9)';
+      headerCell.style.fontWeight = 'bold';
+      headerCell.style.textAlign = 'center';
+      headerCell.textContent = 'Open Graph Metadata Comparison';
+      headerRow.appendChild(headerCell);
+      
+      // Add simple animation
+      headerRow.style.opacity = 0;
+      headerRow.style.transition = 'opacity 0.5s ease';
+      setTimeout(() => {
+        headerRow.style.opacity = 1;
+      }, 100);
+      
+      tableBody.appendChild(headerRow);
+      
+      // Define Open Graph properties to compare
+      const ogProps = [
+        { name: 'OG Title', key: 'title' },
+        { name: 'OG Description', key: 'description' },
+        { name: 'OG Image', key: 'image', isImage: true },
+        { name: 'OG Type', key: 'type' }
+      ];
+      
+      // Process each Open Graph property
+      ogProps.forEach((prop) => {
+        const originalValue = originalSchema.openGraph ? originalSchema.openGraph[prop.key] : '';
+        const canonicalValue = canonicalSchema.openGraph ? canonicalSchema.openGraph[prop.key] : '';
+        
+        // Skip if both are empty
+        if (!originalValue && !canonicalValue) return;
+        
+        if (prop.isImage) {
+          // Handle image properties
+          addOpenGraphImageRow(prop.name, originalValue, canonicalValue);
+        } else {
+          // Handle text properties
+          const originalCell = document.createElement('td');
+          originalCell.style.width = "35%";
+          originalCell.textContent = originalValue || 'Not found';
+          
+          const canonicalCell = document.createElement('td');
+          canonicalCell.style.width = "35%";
+          canonicalCell.textContent = canonicalValue || 'Not found';
+          
+          const statusCell = document.createElement('td');
+          statusCell.style.width = "10%";
+          
+          // If original has property but canonical doesn't, consider it a match (per requirement #2)
+          if (originalValue && !canonicalValue) {
+            statusCell.className = 'status-match';
+            statusCell.textContent = 'Canonical missing (ignored)';
+          }
+          // Only case we consider a mismatch is if canonical has property but original doesn't
+          else if (!originalValue && canonicalValue) {
+            statusCell.className = 'status-mismatch';
+            statusCell.textContent = 'Original missing';
+          }
+          // If both have values, compare them
+          else if (originalValue && canonicalValue) {
+            if (prop.key === 'title' || prop.key === 'description') {
+              // Use the enhanced text comparison for title and description
+              const textComparison = prop.key === 'title' 
+                ? compareTitles(originalValue, canonicalValue) 
+                : compareTexts(originalValue, canonicalValue);
+              
+              statusCell.textContent = textComparison.message;
+              statusCell.className = textComparison.match === true ? 'status-match' : 
+                                     textComparison.match === 'partial' ? 'status-partial' : 
+                                     'status-mismatch';
+            } else {
+              // Simple comparison for other properties
+              const isMatch = originalValue === canonicalValue;
+              statusCell.textContent = isMatch ? 'Match' : 'Mismatch';
+              statusCell.className = isMatch ? 'status-match' : 'status-mismatch';
+            }
+          }
+          
+          const elementCell = document.createElement('td');
+          elementCell.textContent = prop.name;
+          elementCell.style.width = "20%";
+          elementCell.style.maxWidth = "150px";
+          
+          const row = document.createElement('tr');
+          row.appendChild(elementCell);
+          row.appendChild(originalCell);
+          row.appendChild(canonicalCell);
+          row.appendChild(statusCell);
+          
+          // Add fade-in effect with delay
+          row.style.opacity = 0;
+          row.style.transition = 'opacity 0.5s ease';
+          
+          const delay = tableBody.children.length * 50;
+          setTimeout(() => {
+            row.style.opacity = 1;
+          }, delay);
+          
+          tableBody.appendChild(row);
+        }
+      });
+    }
+    
+    // Add Open Graph image comparison
+    function addOpenGraphImageRow(label, originalImage, canonicalImage) {
       if (!originalImage && !canonicalImage) return;
       
       const row = document.createElement('tr');
@@ -1127,10 +1416,28 @@ document.addEventListener('DOMContentLoaded', () => {
       originalCell.className = 'truncate expand-content';
       if (originalImage) {
         try {
-          const imgPreview = document.createElement('div');
-          imgPreview.style.marginBottom = '5px';
-          imgPreview.innerHTML = `<img src="${originalImage}" alt="Preview" style="max-width: 100px; max-height: 60px;">`;
-          originalCell.appendChild(imgPreview);
+          const imgContainer = document.createElement('div');
+          imgContainer.style.marginBottom = '10px';
+          
+          // Create a clickable image with larger dimensions
+          const imgLink = document.createElement('a');
+          imgLink.href = originalImage;
+          imgLink.target = "_blank";
+          imgLink.rel = "noopener noreferrer";
+          imgLink.title = "Click to open image in new tab";
+          
+          const img = document.createElement('img');
+          img.src = originalImage;
+          img.alt = "Preview";
+          img.style.maxWidth = "200px"; 
+          img.style.maxHeight = "120px"; 
+          img.style.cursor = "pointer";
+          img.style.borderRadius = "4px";
+          img.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.2)";
+          
+          imgLink.appendChild(img);
+          imgContainer.appendChild(imgLink);
+          originalCell.appendChild(imgContainer);
           originalCell.appendChild(document.createTextNode(originalImage));
         } catch (e) {
           originalCell.textContent = originalImage;
@@ -1144,10 +1451,28 @@ document.addEventListener('DOMContentLoaded', () => {
       canonicalCell.className = 'truncate expand-content';
       if (canonicalImage) {
         try {
-          const imgPreview = document.createElement('div');
-          imgPreview.style.marginBottom = '5px';
-          imgPreview.innerHTML = `<img src="${canonicalImage}" alt="Preview" style="max-width: 100px; max-height: 60px;">`;
-          canonicalCell.appendChild(imgPreview);
+          const imgContainer = document.createElement('div');
+          imgContainer.style.marginBottom = '10px';
+          
+          // Create a clickable image with larger dimensions
+          const imgLink = document.createElement('a');
+          imgLink.href = canonicalImage;
+          imgLink.target = "_blank";
+          imgLink.rel = "noopener noreferrer";
+          imgLink.title = "Click to open image in new tab";
+          
+          const img = document.createElement('img');
+          img.src = canonicalImage;
+          img.alt = "Preview";
+          img.style.maxWidth = "200px"; 
+          img.style.maxHeight = "120px"; 
+          img.style.cursor = "pointer";
+          img.style.borderRadius = "4px";
+          img.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.2)";
+          
+          imgLink.appendChild(img);
+          imgContainer.appendChild(imgLink);
+          canonicalCell.appendChild(imgContainer);
           canonicalCell.appendChild(document.createTextNode(canonicalImage));
         } catch (e) {
           canonicalCell.textContent = canonicalImage;
