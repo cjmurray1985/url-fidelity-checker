@@ -3,6 +3,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const cors = require('cors');
 const path = require('path');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,12 +16,44 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Extract canonical URL from a webpage
 async function getCanonicalUrl(url) {
   try {
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'
-      },
-      timeout: 10000
+    // Special handling for different URLs
+    const isYahooFinance = url.includes('finance.yahoo.com');
+    const isYahoo = url.includes('yahoo.com');
+    
+    // Use a custom HTTPS agent with keepAlive enabled
+    const agent = new https.Agent({
+      keepAlive: true,
+      rejectUnauthorized: false // Allow self-signed certificates
     });
+    
+    const config = {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br'
+      },
+      timeout: 30000, // Extended timeout
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      decompress: true,
+      httpsAgent: agent,
+      maxRedirects: 10
+    };
+    
+    // Add enhanced configs for Yahoo URLs
+    if (isYahoo) {
+      config.headers['Referer'] = 'https://www.google.com/';
+      config.headers['Cache-Control'] = 'no-cache';
+      config.headers['Pragma'] = 'no-cache';
+      
+      if (isYahooFinance) {
+        config.timeout = 45000; // Even longer timeout for finance pages
+      }
+    }
+    
+    console.log(`Fetching canonical URL for: ${url}`);
+    const response = await axios.get(url, config);
     const $ = cheerio.load(response.data);
     const canonicalLink = $('link[rel="canonical"]').attr('href');
     
@@ -57,9 +90,30 @@ async function getCanonicalUrl(url) {
       differentDomain: true 
     };
   } catch (error) {
+    // Provide more specific error messages for known issues
+    if (url.includes('finance.yahoo.com') && error.message.includes('header')) {
+      return { 
+        success: false, 
+        message: `Error processing Yahoo Finance URL: Header size too large. The server is having trouble with this specific Yahoo Finance URL.` 
+      };
+    }
+    
+    // Provide more context based on error type
+    let errorMessage = `Error fetching URL: ${error.message}`;
+    if (error.code === 'ECONNABORTED') {
+      errorMessage = 'Request timed out. The page might be too large or the server is responding slowly.';
+    } else if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      errorMessage = `Server responded with error: ${error.response.status} ${error.response.statusText}`;
+    } else if (error.request) {
+      // The request was made but no response was received
+      errorMessage = 'No response received from server. Check your internet connection.';
+    }
+    
     return { 
       success: false, 
-      message: `Error fetching URL: ${error.message}` 
+      message: errorMessage
     };
   }
 }
@@ -67,12 +121,44 @@ async function getCanonicalUrl(url) {
 // Extract schema from a webpage
 async function extractPageSchema(url) {
   try {
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'
-      },
-      timeout: 10000
+    // Special handling for different URLs
+    const isYahooFinance = url.includes('finance.yahoo.com');
+    const isYahoo = url.includes('yahoo.com');
+    
+    // Use a custom HTTPS agent with keepAlive enabled
+    const agent = new https.Agent({
+      keepAlive: true,
+      rejectUnauthorized: false // Allow self-signed certificates
     });
+    
+    const config = {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br'
+      },
+      timeout: 30000, // Extended timeout
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      decompress: true,
+      httpsAgent: agent,
+      maxRedirects: 10
+    };
+    
+    // Add enhanced configs for Yahoo URLs
+    if (isYahoo) {
+      config.headers['Referer'] = 'https://www.google.com/';
+      config.headers['Cache-Control'] = 'no-cache';
+      config.headers['Pragma'] = 'no-cache';
+      
+      if (isYahooFinance) {
+        config.timeout = 45000; // Even longer timeout for finance pages
+      }
+    }
+    
+    console.log(`Extracting schema for: ${url}`);
+    const response = await axios.get(url, config);
     const $ = cheerio.load(response.data);
     
     // Collect schema data
@@ -296,10 +382,32 @@ async function extractPageSchema(url) {
     
     return { success: true, schema };
   } catch (error) {
-    console.error(`Error extracting schema from URL: ${error.message}`);
+    console.error(`Error extracting schema from URL ${url}: ${error.message}`);
+    
+    // Provide more specific error messages for known issues
+    if (url.includes('finance.yahoo.com') && error.message.includes('header')) {
+      return { 
+        success: false, 
+        message: `Error processing Yahoo Finance URL: Header size too large. The server is having trouble with this specific Yahoo Finance URL.` 
+      };
+    }
+    
+    // Provide more context based on error type
+    let errorMessage = `Error extracting schema from URL: ${error.message}`;
+    if (error.code === 'ECONNABORTED') {
+      errorMessage = 'Request timed out. The page might be too large or the server is responding slowly.';
+    } else if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      errorMessage = `Server responded with error: ${error.response.status} ${error.response.statusText}`;
+    } else if (error.request) {
+      // The request was made but no response was received
+      errorMessage = 'No response received from server. Check your internet connection.';
+    }
+    
     return { 
       success: false, 
-      message: `Error extracting schema from URL: ${error.message}` 
+      message: errorMessage
     };
   }
 }
@@ -480,20 +588,57 @@ function calculateFidelityScore(originalSchema, canonicalSchema) {
   };
 }
 
-// API endpoint to check URL fidelity
-app.post('/api/check-fidelity', async (req, res) => {
-  const { url } = req.body;
-  
+// URL validation function
+function validateUrl(url) {
   if (!url) {
-    return res.status(400).json({ success: false, message: 'URL is required' });
+    return { valid: false, message: 'URL is required' };
+  }
+  
+  // Trim whitespace
+  url = url.trim();
+  
+  // Require http:// or https:// protocol
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return { valid: false, message: 'URL must start with http:// or https://' };
   }
   
   try {
     // Validate URL format
-    new URL(url);
+    const parsedUrl = new URL(url);
+    
+    // Check for valid hostname
+    if (!parsedUrl.hostname || parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1') {
+      return { valid: false, message: 'Invalid hostname in URL' };
+    }
+    
+    // Check for minimum TLD length
+    const parts = parsedUrl.hostname.split('.');
+    if (parts.length < 2 || parts[parts.length - 1].length < 2) {
+      return { valid: false, message: 'Invalid domain in URL' };
+    }
+    
+    return { valid: true, url: url };
+  } catch (error) {
+    return { valid: false, message: 'Invalid URL format' };
+  }
+}
+
+// API endpoint to check URL fidelity
+app.post('/api/check-fidelity', async (req, res) => {
+  const { url } = req.body;
+  
+  // Validate URL
+  const validation = validateUrl(url);
+  if (!validation.valid) {
+    return res.status(400).json({ success: false, message: validation.message });
+  }
+  
+  try {
+    // URL is validated and sanitized
+    const validatedUrl = validation.url;
     
     // Step 1: Get canonical URL
-    const canonicalResult = await getCanonicalUrl(url);
+    const canonicalResult = await getCanonicalUrl(validatedUrl);
     
     if (!canonicalResult.success) {
       return res.json({ success: false, message: canonicalResult.message });
@@ -544,10 +689,64 @@ app.post('/api/check-fidelity', async (req, res) => {
     });
     
   } catch (error) {
-    if (error.code === 'ERR_INVALID_URL') {
-      return res.status(400).json({ success: false, message: 'Invalid URL format' });
-    }
+    // Since we've already validated the URL format, this is likely a different error
+    console.error('Error processing URL:', error);
     return res.status(500).json({ success: false, message: `Server error: ${error.message}` });
+  }
+});
+
+// Special handler for Yahoo Finance URLs
+app.post('/api/check-finance-url', async (req, res) => {
+  const { url } = req.body;
+  
+  // Validate URL is from Yahoo Finance
+  if (!url.includes('finance.yahoo.com')) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'This endpoint is specifically for Yahoo Finance URLs' 
+    });
+  }
+  
+  // Validate URL format
+  const validation = validateUrl(url);
+  if (!validation.valid) {
+    return res.status(400).json({ success: false, message: validation.message });
+  }
+  
+  try {
+    console.log('Processing Yahoo Finance URL:', url);
+    
+    // Due to Yahoo Finance's header issues, we'll just extract a probable canonical URL
+    // based on URL patterns instead of fetching the actual page
+    
+    // Extract the article ID from the URL
+    const urlParts = url.split('-');
+    const articleId = urlParts[urlParts.length - 1].replace('.html', '');
+    
+    if (!articleId || articleId.length < 5) {
+      return res.json({ 
+        success: false, 
+        message: 'Could not extract article ID from Yahoo Finance URL' 
+      });
+    }
+    
+    // Try to derive the business insider canonical URL
+    const businessInsiderUrl = `https://www.businessinsider.com/article/${articleId}`;
+    
+    // Return a simple success with best-guess canonical URL
+    return res.json({
+      success: true,
+      message: 'Yahoo Finance URL processed (without fetching the page)',
+      originalUrl: url,
+      canonicalUrl: businessInsiderUrl,
+      note: 'This is a best-guess canonical URL based on pattern matching, not actual page content'
+    });
+  } catch (error) {
+    console.error('Error processing Yahoo Finance URL:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: `Error processing Yahoo Finance URL: ${error.message}` 
+    });
   }
 });
 

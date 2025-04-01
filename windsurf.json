@@ -1,0 +1,11 @@
+{
+  "name": "url-fidelity-checker",
+  "type": "web",
+  "runtime": "node",
+  "buildCommand": "npm install",
+  "startCommand": "node server.js",
+  "port": 3000,
+  "env": {
+    "NODE_ENV": "production"
+  }
+}

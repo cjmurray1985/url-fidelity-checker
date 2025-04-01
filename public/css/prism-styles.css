@@ -67,9 +67,9 @@ html {
 body {
   font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   line-height: 1.6;
-  color: #fff;
-  background-color: #000013;
-  background-image: linear-gradient(125deg, rgba(8, 8, 24, 1) 0%, rgba(6, 6, 32, 1) 100%);
+  color: var(--text-color);
+  background-color: var(--bg-color);
+  background-image: var(--bg-gradient);
   position: relative;
   overflow-x: hidden;
   min-height: 100vh;
@@ -99,14 +99,14 @@ body::before {
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: -2;
-  opacity: 0.03;
+  opacity: var(--logo-opacity);
   pointer-events: none;
 }
 
 .yahoo-logo-bg svg {
   width: 100%;
   height: 100%;
-  fill: rgba(255, 255, 255, 0.5);
+  fill: var(--logo-fill);
 }
 
 @keyframes flare-move {
@@ -131,19 +131,16 @@ body::before {
   background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.8) 100%), 
               conic-gradient(
                 from 0deg, 
-                rgba(0, 0, 255, 0) 0%, 
-                rgba(0, 255, 255, 0.15) 10%, 
-                rgba(0, 255, 0, 0.15) 30%,
-                rgba(255, 255, 0, 0.15) 40%,
-                rgba(255, 0, 0, 0.15) 60%,
-                rgba(255, 0, 255, 0.15) 80%,
-                rgba(0, 0, 255, 0) 100%
+                var(--flare-color-start) 0%, 
+                var(--flare-color-mid) 40%, 
+                var(--flare-color-end) 80%,
+                var(--flare-color-start) 100%
               );
   border-radius: 50%;
   filter: blur(120px);
   z-index: -1;
-  opacity: 0.3;
-  mix-blend-mode: screen;
+  opacity: var(--flare-opacity);
+  mix-blend-mode: var(--flare-blend);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -164,26 +161,16 @@ body::before {
   background: radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.7) 100%), 
               conic-gradient(
                 from 180deg, 
-                rgba(0, 0, 255, 0) 0%, 
-                rgba(0, 150, 255, 0.1) 20%, 
-                rgba(0, 255, 150, 0.1) 40%,
-                rgba(50, 255, 50, 0.1) 60%,
-                rgba(255, 50, 50, 0.1) 80%,
-                rgba(0, 0, 255, 0) 100%
+                var(--flare-color-start) 0%, 
+                var(--flare-color-mid) 40%, 
+                var(--flare-color-end) 80%,
+                var(--flare-color-start) 100%
               );
 }
 
 .light-streak {
   position: fixed;
-  background: linear-gradient(90deg, 
-    transparent, 
-    rgba(0, 255, 255, 0.1),
-    rgba(0, 255, 0, 0.2),
-    rgba(255, 255, 0, 0.3),
-    rgba(255, 0, 0, 0.2),
-    rgba(255, 0, 255, 0.1),
-    transparent
-  );
+  background: var(--streak-color);
   height: 2px;
   width: 150px;
   opacity: 0;
@@ -192,6 +179,7 @@ body::before {
   z-index: -1;
   transform-origin: center;
   animation: streak-flash 15s ease-in-out infinite;
+  mix-blend-mode: var(--streak-blend);
 }
 
 @keyframes streak-flash {
@@ -200,7 +188,7 @@ body::before {
     transform: rotate(45deg) translateX(-100vw) scale(0);
   }
   10% {
-    opacity: 0.7;
+    opacity: var(--streak-opacity);
     width: 150px;
   }
   20% {
@@ -269,12 +257,12 @@ body::before {
 
 .input-section {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--input-bg);
   backdrop-filter: blur(10px);
   border-radius: 50px;
   padding: 2px;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--input-border);
   display: flex;
   position: relative;
   overflow: visible;
@@ -283,28 +271,31 @@ body::before {
 input[type="url"] {
   flex: 1;
   padding: 20px 60px 20px 25px;
-  border: none;
+  border: 2px solid var(--input-border);
   border-radius: 50px;
   font-size: 16px;
   font-family: 'Inter', sans-serif;
   font-weight: 400;
-  background: rgba(255, 255, 255, 0.03);
-  color: #fff;
+  background: var(--input-bg);
+  color: var(--input-text);
   transition: all 0.3s ease;
   letter-spacing: 0;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
+  /* Improve contrast for accessibility */
+  outline: none;
 }
 
 input[type="url"]:focus {
-  outline: none;
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  border-color: var(--focus-outline);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+  background: var(--input-bg);
+  color: var(--input-text);
 }
 
 input[type="url"]::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--input-placeholder);
   font-weight: 300;
 }
 
@@ -322,8 +313,8 @@ button {
   width: 50px;
   height: 50px;
   min-width: 50px;
-  background: linear-gradient(90deg, rgba(125, 46, 255, 0.2), rgba(18, 169, 255, 0.2));
-  color: rgba(255, 255, 255, 0.8);
+  background: var(--button-bg);
+  color: rgba(255, 255, 255, 0.95);
   border: none;
   border-radius: 50%;
   display: flex;
@@ -336,6 +327,8 @@ button {
   top: 50%;
   transform: translateY(-50%);
   overflow: hidden;
+  /* Enhance with border for better visibility */
+  border: 2px solid transparent;
 }
 
 button:before {
@@ -367,15 +360,21 @@ button svg {
 }
 
 button:hover {
-  background: linear-gradient(90deg, rgba(125, 46, 255, 0.3), rgba(18, 169, 255, 0.3));
+  background: var(--button-hover);
 }
 
 button:hover svg {
-  stroke: rgba(255, 255, 255, 0.95);
+  stroke: #ffffff;
 }
 
 button:active {
-  background: linear-gradient(90deg, rgba(125, 46, 255, 0.4), rgba(18, 169, 255, 0.4));
+  background: var(--button-active);
+}
+
+button:focus-visible {
+  border-color: var(--focus-outline);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+  outline: none;
 }
 
 .glow {
@@ -385,9 +384,9 @@ button:active {
   transform: translateX(-50%);
   width: 350px;
   height: 10px;
-  background: radial-gradient(ellipse at center, rgba(125, 46, 255, 0.2), transparent 70%);
+  background: radial-gradient(ellipse at center, var(--glow-color), transparent 70%);
   border-radius: 50%;
-  filter: blur(15px);
+  filter: blur(var(--glow-blur));
   opacity: 0.5;
 }
 
@@ -426,14 +425,14 @@ button:active {
 }
 
 .result-card {
-  background: rgba(20, 20, 40, 0.7);
+  background: var(--card-bg);
   backdrop-filter: blur(15px);
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
   padding: 30px;
   margin-bottom: 30px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-color);
   position: relative;
   z-index: 3; /* Higher z-index than the section */
 }
@@ -454,7 +453,7 @@ button:active {
   justify-content: center;
   font-size: 36px;
   font-weight: bold;
-  background-color: rgba(20, 20, 40, 0.8);
+  background-color: var(--score-bg);
   margin-bottom: 15px;
   position: relative;
   overflow: hidden;
@@ -488,7 +487,7 @@ button:active {
 
 .url-info {
   margin-bottom: 30px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--section-bg);
   padding: 20px;
   border-radius: 10px;
 }
@@ -502,11 +501,11 @@ button:active {
 .url-label {
   font-weight: 600;
   min-width: 120px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-secondary);
 }
 
 .url-row a {
-  color: var(--accent-blue);
+  color: var(--link-color);
   text-decoration: none;
   word-break: break-all;
 }
@@ -561,17 +560,17 @@ button:active {
 }
 
 .comparison-result.match::before {
-  background-color: var(--secondary-color);
+  background-color: var(--success-color, #4caf50);
   box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
 }
 
 .comparison-result.partial::before {
-  background-color: var(--warning-color);
+  background-color: var(--warning-color, #ff9800);
   box-shadow: 0 0 10px rgba(243, 156, 18, 0.5);
 }
 
 .comparison-result.mismatch::before {
-  background-color: var(--danger-color);
+  background-color: var(--danger-color, #f44336);
   box-shadow: 0 0 10px rgba(231, 76, 60, 0.5);
 }
 
@@ -612,18 +611,20 @@ button:active {
 .error-card {
   background: rgba(231, 76, 60, 0.15);
   backdrop-filter: blur(15px);
-  border-left: 4px solid var(--danger-color);
+  border-left: 4px solid var(--danger-color, #f44336);
   padding: 20px;
   border-radius: 10px;
   border: 1px solid rgba(231, 76, 60, 0.3);
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-color);
 }
 
 .error-card h2 {
-  color: var(--danger-color);
+  color: var(--danger-color, #f44336);
   margin-bottom: 10px;
   font-family: 'Montserrat', sans-serif;
   font-weight: 600;
+  /* Add better focus highlight when tabbed to */
+  outline: none;
 }
 
 .detailed-comparison {
@@ -716,19 +717,19 @@ button:active {
 }
 
 .status-match {
-  color: var(--secondary-color);
+  color: var(--success-color, #4caf50);
   font-weight: 600;
   text-shadow: 0 0 5px rgba(46, 204, 113, 0.3);
 }
 
 .status-partial {
-  color: var(--warning-color);
+  color: var(--warning-color, #ff9800);
   font-weight: 600;
   text-shadow: 0 0 5px rgba(243, 156, 18, 0.3);
 }
 
 .status-mismatch {
-  color: var(--danger-color);
+  color: var(--danger-color, #f44336);
   font-weight: 600;
   text-shadow: 0 0 5px rgba(231, 76, 60, 0.3);
 }
@@ -741,7 +742,7 @@ button:active {
 footer {
   text-align: center;
   padding: 20px;
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--footer-text);
   font-size: 0.8rem;
   position: fixed;
   bottom: 0;

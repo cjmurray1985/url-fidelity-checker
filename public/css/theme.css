@@ -1,0 +1,291 @@
+/* Theme variables for light and dark mode */
+
+/* Light Mode (Default) */
+html[data-theme="light"] {
+  /* Background colors - prismatic gradient that echoes the dark theme */
+  --bg-color: #e8e4ff;
+  --bg-gradient: linear-gradient(125deg, #e8e4ff 0%, #f0eaff 40%, #e8f2ff 80%, #e6edff 100%);
+  
+  /* Text colors - dark enough for 7:1 contrast ratio (WCAG AAA) */
+  --text-color: #1c1139;
+  --text-secondary: #373151; /* High contrast with light backgrounds */
+  
+  /* Card and section backgrounds - glass-like effect similar to dark mode */
+  --card-bg: rgba(255, 255, 255, 0.7);
+  --card-border: rgba(95, 1, 209, 0.12);
+  --section-bg: rgba(255, 255, 255, 0.5);
+  --score-bg: rgba(246, 243, 255, 0.9);
+  
+  /* Input styles with sufficient contrast */
+  --input-bg: rgba(255, 255, 255, 0.6);
+  --input-border: rgba(95, 1, 209, 0.2);
+  --input-text: #1c1139;
+  --input-placeholder: #666666; /* 4.5:1 contrast ratio */
+  
+  /* Button styles with enough contrast but maintaining the gradient feel */
+  --button-bg: linear-gradient(90deg, rgba(95, 1, 209, 0.7), rgba(18, 126, 221, 0.7));
+  --button-hover: linear-gradient(90deg, rgba(95, 1, 209, 0.8), rgba(18, 126, 221, 0.8));
+  --button-active: linear-gradient(90deg, rgba(95, 1, 209, 0.9), rgba(18, 126, 221, 0.9));
+  
+  /* Links with good contrast (4.5:1 minimum) */
+  --link-color: #0550a0;
+  --accent-color: #5f01d1;
+  
+  /* Visual elements that mirror the dark theme */
+  --logo-opacity: 0.05;
+  --logo-fill: rgba(95, 1, 209, 0.15);
+  
+  /* Flare effects adjusted for light background but still visible */
+  --flare-opacity: 0.25;
+  --flare-blend: multiply;
+  --flare-color-start: rgba(95, 1, 209, 0.1);
+  --flare-color-mid: rgba(18, 169, 255, 0.15);
+  --flare-color-end: rgba(255, 64, 129, 0.1);
+  
+  /* Light streaks - visible on light background */
+  --streak-opacity: 0.4;
+  --streak-blend: overlay;
+  --streak-color: linear-gradient(90deg, 
+    rgba(95, 1, 209, 0), 
+    rgba(95, 1, 209, 0.3),
+    rgba(18, 169, 255, 0.4),
+    rgba(255, 64, 129, 0.3),
+    rgba(95, 1, 209, 0));
+  
+  /* Glow effects to match dark theme */
+  --glow-color: rgba(95, 1, 209, 0.2);
+  --glow-spread: 45px;
+  --glow-blur: 60px;
+  
+  /* Table colors with proper contrast */
+  --table-header-bg: rgba(95, 1, 209, 0.12);
+  --table-header-text: #1c1139; /* High contrast */
+  --table-row-hover: rgba(95, 1, 209, 0.05);
+  --table-border: rgba(95, 1, 209, 0.1);
+  
+  /* Shadow effects that provide depth */
+  --card-shadow: 0 10px 30px rgba(95, 1, 209, 0.08);
+  
+  /* Footer text with good contrast */
+  --footer-text: #373151; /* Better than 4.5:1 contrast ratio */
+  
+  /* Focus outline for accessibility */
+  --focus-outline: #5f01d1;
+  
+  /* Status colors with proper contrast */
+  --success-color: #087f23; /* Darker green for better contrast */
+  --warning-color: #b35900; /* Darker orange for better contrast */
+  --danger-color: #ab000d; /* Darker red for better contrast */
+}
+
+/* Dark Mode */
+html[data-theme="dark"] {
+  /* Background colors - deep space-like gradient */
+  --bg-color: #000013;
+  --bg-gradient: linear-gradient(125deg, rgba(8, 8, 24, 1) 0%, rgba(6, 6, 32, 1) 75%, rgba(10, 10, 40, 1) 100%);
+  
+  /* Text colors with good contrast */
+  --text-color: rgba(255, 255, 255, 0.95); /* Improved contrast */
+  --text-secondary: rgba(255, 255, 255, 0.8); /* Improved contrast */
+  
+  /* Card and section backgrounds - glass-like effect */
+  --card-bg: rgba(20, 20, 40, 0.8); /* Improved background for text */
+  --card-border: rgba(255, 255, 255, 0.1); /* Improved visibility */
+  --score-bg: rgba(30, 30, 50, 0.8); /* Improved background for text */
+  --section-bg: rgba(15, 15, 35, 0.6); /* Improved background for text */
+  
+  /* Input styles */
+  --input-bg: rgba(255, 255, 255, 0.08); /* Improved contrast */
+  --input-border: rgba(255, 255, 255, 0.15); /* Improved visibility */
+  --input-text: #fff;
+  --input-placeholder: rgba(255, 255, 255, 0.6); /* Improved contrast */
+  
+  /* Button styles */
+  --button-bg: linear-gradient(90deg, rgba(125, 46, 255, 0.5), rgba(18, 169, 255, 0.5)); /* Improved contrast */
+  --button-hover: linear-gradient(90deg, rgba(125, 46, 255, 0.6), rgba(18, 169, 255, 0.6));
+  --button-active: linear-gradient(90deg, rgba(125, 46, 255, 0.7), rgba(18, 169, 255, 0.7));
+  
+  /* Links and accent colors */
+  --link-color: #77c3ff; /* Improved contrast */
+  --accent-color: #7939e8; /* Improved visibility */
+  
+  /* Visual elements that mirror the light theme */
+  --logo-opacity: 0.05; /* Improved visibility */
+  --logo-fill: rgba(255, 255, 255, 0.5);
+  
+  /* Flare effects for dark background */
+  --flare-opacity: 0.3;
+  --flare-blend: screen;
+  --flare-color-start: rgba(0, 0, 255, 0); 
+  --flare-color-mid: rgba(0, 255, 255, 0.15);
+  --flare-color-end: rgba(255, 0, 255, 0.15);
+  
+  /* Light streaks for dark background */
+  --streak-opacity: 0.5;
+  --streak-blend: screen;
+  --streak-color: linear-gradient(90deg, 
+    transparent, 
+    rgba(0, 255, 255, 0.1),
+    rgba(0, 255, 0, 0.2),
+    rgba(255, 255, 0, 0.3),
+    rgba(255, 0, 0, 0.2),
+    rgba(255, 0, 255, 0.1),
+    transparent);
+  
+  /* Glow effects for dark theme */
+  --glow-color: rgba(125, 46, 255, 0.3); /* Improved visibility */
+  --glow-spread: 35px;
+  --glow-blur: 45px;
+  
+  /* Table styles */
+  --table-header-bg: rgba(0, 0, 0, 0.3);
+  --table-header-text: rgba(255, 255, 255, 0.95); /* Improved contrast */
+  --table-row-hover: rgba(255, 255, 255, 0.07); /* Improved hover state */
+  --table-border: rgba(255, 255, 255, 0.1); /* Improved visibility */
+  
+  /* Card shadow */
+  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  
+  /* Footer text */
+  --footer-text: rgba(255, 255, 255, 0.7); /* Improved contrast */
+  
+  /* Focus outline for accessibility */
+  --focus-outline: #77c3ff; /* Focus outline color */
+  
+  /* Status colors for better visibility in dark mode */
+  --success-color: #4caf50; /* Bright green */
+  --warning-color: #ff9800; /* Bright orange */
+  --danger-color: #f44336; /* Bright red */
+}
+
+/* Theme toggle button */
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--button-bg);
+  border: 1px solid var(--card-border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.theme-toggle:hover {
+  transform: scale(1.05);
+  background: var(--button-hover);
+}
+
+.theme-toggle svg {
+  width: 20px;
+  height: 20px;
+  color: var(--text-color);
+  transition: transform 0.5s ease;
+}
+
+/* Dark mode icon (moon) */
+.theme-toggle .moon {
+  display: none;
+}
+
+/* Light mode icon (sun) */
+.theme-toggle .sun {
+  display: none;
+}
+
+/* Show/hide icons based on current theme */
+html[data-theme="dark"] .theme-toggle .moon {
+  display: block;
+}
+
+html[data-theme="light"] .theme-toggle .sun {
+  display: block;
+}
+
+/* Add tooltip for accessibility */
+.theme-toggle::after {
+  content: attr(aria-label);
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 10px;
+  background: var(--card-bg);
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  border: 1px solid var(--card-border);
+}
+
+.theme-toggle:hover::after {
+  opacity: 1;
+}
+
+/* Animation for theme change */
+.theme-transition {
+  transition: background-color 0.5s ease, color 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease;
+}
+
+/* Accessibility improvements */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Focus styles for accessibility */
+a:focus,
+button:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+}
+
+/* Skip link for keyboard users */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--text-color);
+  color: var(--bg-color);
+  padding: 8px;
+  z-index: 9999;
+  transition: top 0.3s;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Make sure interactive elements have enough tap target size */
+button,
+.theme-toggle,
+select {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Better focus indication for theme toggle */
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+}

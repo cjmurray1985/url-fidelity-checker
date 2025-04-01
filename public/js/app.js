@@ -1,4 +1,77 @@
+// Set initial theme based on user preference or system settings
+function setInitialTheme() {
+  const savedTheme = localStorage.getItem('theme');
+  const manuallySet = localStorage.getItem('theme_manually_set');
+  
+  if (savedTheme && manuallySet) {
+    // Use saved preference if manually set by user
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  } else {
+    // Check for system preference, default to dark if not available
+    const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+    const systemTheme = prefersDarkScheme.matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', systemTheme);
+    
+    // Save the system preference but don't mark as manually set
+    localStorage.setItem('theme', systemTheme);
+    // Clear the manually set flag if it exists
+    if (manuallySet) {
+      localStorage.removeItem('theme_manually_set');
+    }
+  }
+}
+
+// Call this before DOM content loaded to prevent flash of wrong theme
+setInitialTheme();
+
 document.addEventListener('DOMContentLoaded', () => {
+  // Theme toggle functionality
+  const themeToggle = document.querySelector('.theme-toggle');
+  
+  // Apply theme transition class to smooth color changes
+  document.body.classList.add('theme-transition');
+  document.querySelector('html').classList.add('theme-transition');
+  
+  // Update theme toggle button label based on current theme
+  function updateThemeToggleLabel() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    themeToggle.setAttribute('aria-label', `Switch to ${newTheme} mode`);
+  }
+  
+  // Call initially to set correct label
+  updateThemeToggleLabel();
+  
+  // Theme toggle event listener
+  themeToggle.addEventListener('click', () => {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    // Update the theme attribute
+    document.documentElement.setAttribute('data-theme', newTheme);
+    
+    // Save preference to localStorage with a special flag to indicate manual selection
+    localStorage.setItem('theme', newTheme);
+    localStorage.setItem('theme_manually_set', 'true');
+    
+    // Update the aria-label for the toggle button
+    updateThemeToggleLabel();
+  });
+  
+  // Listen for system preference changes if the user hasn't manually set a preference
+  const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+  prefersDarkScheme.addEventListener('change', (e) => {
+    // Only change the theme if the user hasn't manually set a preference
+    if (!localStorage.getItem('theme_manually_set')) {
+      const systemTheme = e.matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', systemTheme);
+      localStorage.setItem('theme', systemTheme);
+      
+      // Update toggle button label
+      updateThemeToggleLabel();
+    }
+  });
+  
   // DOM Elements
   const urlForm = document.getElementById('url-form');
   const urlInput = document.getElementById('url-input');
@@ -19,6 +92,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const originalStats = document.getElementById('original-stats');
   const canonicalStats = document.getElementById('canonical-stats');
   const contentComparisonTable = document.getElementById('content-comparison-table');
+  
+  // Keyboard shortcut helper
+  const keyboardShortcuts = [
+    { key: '/', description: 'Focus the URL input' },
+    { key: 'Enter', description: 'Check URL (when input is focused)' },
+    { key: 'Escape', description: 'Clear results and focus URL input' },
+    { key: 'r', description: 'Scroll to results section (when available)' }
+  ];
   
   // Add smooth fade-in effect to the body when loaded
   document.body.style.opacity = 0;
@@ -44,6 +125,46 @@ document.addEventListener('DOMContentLoaded', () => {
     pulseAnimation();
   }
   
+  // Keyboard shortcuts implementation
+  document.addEventListener('keydown', (e) => {
+    // Skip if user is typing in input field (except for Escape)
+    if (e.target.tagName === 'INPUT' && e.target.type === 'text' && e.key !== 'Escape') {
+      return;
+    }
+    
+    // Skip if modifier keys are pressed (except for slash which often uses shift)
+    if ((e.ctrlKey || e.metaKey || (e.altKey && e.key !== '/')) && e.key !== 'Escape') {
+      return;
+    }
+    
+    switch (e.key) {
+      case '/':
+        // Focus the URL input
+        e.preventDefault();
+        urlInput.focus();
+        break;
+      case 'Escape':
+        // Clear results and focus URL input
+        resetUI();
+        urlInput.focus();
+        break;
+      case 'r':
+        // Scroll to results section if visible
+        if (!resultsSection.classList.contains('hidden')) {
+          window.scrollTo({
+            top: resultsSection.offsetTop - 50,
+            behavior: 'smooth'
+          });
+        } else if (!errorSection.classList.contains('hidden')) {
+          window.scrollTo({
+            top: errorSection.offsetTop - 50,
+            behavior: 'smooth'
+          });
+        }
+        break;
+    }
+  });
+  
   // Form submission
   urlForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -56,8 +177,22 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Validate input first
     const url = urlInput.value.trim();
-    if (!isValidURL(url)) {
+    
+    // Check if URL is empty
+    if (!url) {
+      showError('URL is required');
+      return;
+    }
+    
+    // Check if URL has protocol
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
       showError('Please enter a valid URL including http:// or https://');
+      return;
+    }
+    
+    // Full URL validation
+    if (!isValidURL(url)) {
+      showError('Please enter a valid website URL (e.g., https://example.com)');
       return;
     }
     
@@ -65,8 +200,14 @@ document.addEventListener('DOMContentLoaded', () => {
     fadeIn(loadingSection);
     
     try {
+      // Determine which API endpoint to use based on URL
+      const isYahooFinance = url.includes('finance.yahoo.com');
+      const apiEndpoint = isYahooFinance ? '/api/check-finance-url' : '/api/check-fidelity';
+      
+      console.log(`Using endpoint ${apiEndpoint} for URL: ${url}`);
+      
       // Call the API
-      const response = await fetch('/api/check-fidelity', {
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -82,6 +223,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!data.success) {
         // Show error
         showError(data.message);
+        return;
+      }
+      
+      // Special handling for Yahoo Finance URLs that use the simplified endpoint
+      if (url.includes('finance.yahoo.com') && !data.fidelityScore) {
+        // Just show the canonical URL for Yahoo Finance
+        showFinanceResult(data);
         return;
       }
       
@@ -108,8 +256,34 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Validate URL function
   function isValidURL(url) {
+    // Check if URL is empty or just whitespace
+    if (!url || url.trim() === '') {
+      return false;
+    }
+    
+    // Ensure URL has http:// or https:// protocol
+    if (!url.trim().startsWith('http://') && !url.trim().startsWith('https://')) {
+      return false;
+    }
+    
     try {
-      new URL(url);
+      // Parse the URL
+      const parsedUrl = new URL(url);
+      
+      // Validate hostname (reject localhost and IP addresses)
+      if (!parsedUrl.hostname || 
+          parsedUrl.hostname === 'localhost' || 
+          parsedUrl.hostname === '127.0.0.1' ||
+          /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(parsedUrl.hostname)) {
+        return false;
+      }
+      
+      // Ensure domain has at least one dot and a valid TLD (at least 2 chars)
+      const parts = parsedUrl.hostname.split('.');
+      if (parts.length < 2 || parts[parts.length - 1].length < 2) {
+        return false;
+      }
+      
       return true;
     } catch (e) {
       return false;
@@ -165,6 +339,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Add fade in effect
     fadeIn(errorSection);
+    
+    // Focus on the error card for screen readers
+    setTimeout(() => {
+      errorSection.querySelector('.error-card').focus();
+    }, 100);
   }
   
   // Helper function to compare texts with word overlap
@@ -285,6 +464,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
+  // Special display function for Yahoo Finance URLs
+  function showFinanceResult(data) {
+    // Simple UI to just show the canonical URL for Yahoo Finance articles
+    
+    // Reset UI first
+    resetUI();
+    
+    // Create a simplified result card
+    errorSection.classList.remove('hidden');
+    const errorCard = errorSection.querySelector('.error-card');
+    errorCard.style.background = 'rgba(52, 152, 219, 0.15)';
+    errorCard.style.borderLeftColor = '#3498db';
+    
+    // Update the header
+    const header = errorCard.querySelector('h2');
+    header.style.color = '#3498db';
+    header.textContent = 'Yahoo Finance URL Processed';
+    
+    // Set the message with both URLs
+    errorMessage.innerHTML = `
+      <p><strong>This URL is from Yahoo Finance, which requires special handling.</strong></p>
+      <p style="margin-top:10px"><strong>Original URL:</strong><br>
+      <a href="${data.originalUrl}" target="_blank">${data.originalUrl}</a></p>
+      <p style="margin-top:10px"><strong>Canonical URL:</strong><br>
+      <a href="${data.canonicalUrl}" target="_blank">${data.canonicalUrl}</a></p>
+      <p style="margin-top:15px">We've found the canonical URL but can't perform a full analysis due to technical limitations with Yahoo Finance pages.</p>
+    `;
+    
+    // Add fade in effect
+    fadeIn(errorSection);
+    
+    // Scroll to the error section
+    window.scrollTo({
+      top: errorSection.offsetTop - 50,
+      behavior: 'smooth'
+    });
+  }
+  
   // Display results function
   function displayResults(data) {
     // Show results section with fade effect
@@ -339,11 +556,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const step = 30;
     let currentScore = 0;
     const scoreElement = document.getElementById('fidelity-score');
+    const scoreCircle = document.querySelector('.score-circle');
     const increment = targetScore / (duration / step);
     
     // Reset score text and circle percentage
     scoreElement.textContent = '0';
-    document.querySelector('.score-circle').style.setProperty('--percentage', '0%');
+    scoreCircle.style.setProperty('--percentage', '0%');
+    scoreCircle.setAttribute('aria-valuenow', '0');
     
     const timer = setInterval(() => {
       currentScore += increment;
@@ -352,8 +571,10 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(timer);
       }
       
-      scoreElement.textContent = Math.round(currentScore);
-      document.querySelector('.score-circle').style.setProperty('--percentage', `${Math.round(currentScore)}%`);
+      const roundedScore = Math.round(currentScore);
+      scoreElement.textContent = roundedScore;
+      scoreCircle.style.setProperty('--percentage', `${roundedScore}%`);
+      scoreCircle.setAttribute('aria-valuenow', roundedScore.toString());
     }, step);
   }
   
