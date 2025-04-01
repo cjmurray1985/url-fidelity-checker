@@ -419,21 +419,115 @@ function calculateFidelityScore(originalSchema, canonicalSchema) {
   
   // Compare title (3 points)
   totalPoints += 3;
+  let titleMatch = false;
+  
   if (originalSchema.title === canonicalSchema.title) {
     earnedPoints += 3;
+    titleMatch = true;
   } else if (originalSchema.title && canonicalSchema.title) {
     // Clean titles by removing site names
     const cleanTitle = (title) => {
+      // Common patterns: " - Site Name", " | Site Name", ": Site Name"
       return title.replace(/(\s[-|:]\s.*$)|(\s[-|:]\s.*$)/g, '').trim();
     };
     
     const cleanTitle1 = cleanTitle(originalSchema.title);
     const cleanTitle2 = cleanTitle(canonicalSchema.title);
     
+    // Calculate similarity score for cleaned titles
+    const calculateSimilarity = (str1, str2) => {
+      if (!str1 || !str2) return 0;
+      
+      // Convert to lowercase and split into words
+      const words1 = str1.toLowerCase().split(/\s+/);
+      const words2 = str2.toLowerCase().split(/\s+/);
+      
+      // Count matching words
+      let matchingWords = 0;
+      for (const word of words1) {
+        if (word.length > 2 && words2.includes(word)) {
+          matchingWords++;
+        }
+      }
+      
+      // Calculate similarity as a percentage
+      const totalUniqueWords = new Set([...words1, ...words2]).size;
+      return matchingWords / Math.min(words1.length, words2.length);
+    };
+    
+    const similarity = calculateSimilarity(cleanTitle1, cleanTitle2);
+    
     if (cleanTitle1 === cleanTitle2) {
       earnedPoints += 3;
-    } else if (cleanTitle1.includes(cleanTitle2) || cleanTitle2.includes(cleanTitle1)) {
+      titleMatch = true; // Consider matching titles (excluding site names) as a full match
+    } else if (similarity >= 0.7) {
+      // High similarity (70% or more matching words)
+      earnedPoints += 2;
+      titleMatch = true;
+    } else if (similarity >= 0.5) {
+      // Moderate similarity (50-70% matching words)
       earnedPoints += 1.5;
+      titleMatch = 'partial';
+    } else if (cleanTitle1.includes(cleanTitle2) || cleanTitle2.includes(cleanTitle1)) {
+      // One title contains the other but low word similarity
+      earnedPoints += 1;
+      titleMatch = 'partial';
+    } else {
+      // Low similarity
+      titleMatch = false;
+    }
+  }
+  
+  // Also consider H1 headline in title comparison
+  if (originalSchema.h1Content && canonicalSchema.h1Content) {
+    const normalize = (text) => {
+      return text.toLowerCase().replace(/\s+/g, ' ').trim();
+    };
+    
+    const normalizedH1Original = normalize(originalSchema.h1Content);
+    const normalizedH1Canonical = normalize(canonicalSchema.h1Content);
+    
+    // Calculate H1 similarity
+    const calculateSimilarity = (str1, str2) => {
+      if (!str1 || !str2) return 0;
+      
+      // Convert to lowercase and split into words
+      const words1 = str1.toLowerCase().split(/\s+/);
+      const words2 = str2.toLowerCase().split(/\s+/);
+      
+      // Count matching words
+      let matchingWords = 0;
+      for (const word of words1) {
+        if (word.length > 2 && words2.includes(word)) {
+          matchingWords++;
+        }
+      }
+      
+      // Calculate similarity as a percentage
+      return matchingWords / Math.min(words1.length, words2.length);
+    };
+    
+    const h1Similarity = calculateSimilarity(normalizedH1Original, normalizedH1Canonical);
+    
+    if (normalizedH1Original === normalizedH1Canonical) {
+      // If H1s match exactly
+      if (titleMatch === false) {
+        earnedPoints += 1.5; // Add some points for matching H1
+        titleMatch = 'partial'; // Only consider it a partial match even if H1s match exactly
+      }
+    } else if (h1Similarity >= 0.7) {
+      // If H1s have high similarity
+      if (titleMatch === false) {
+        earnedPoints += 1; // Add points for similar H1
+        titleMatch = 'partial';
+      }
+    } else if (normalizedH1Original.includes(normalizedH1Canonical) || 
+               normalizedH1Canonical.includes(normalizedH1Original)) {
+      // If H1s have significant overlap
+      if (titleMatch === false) {
+        earnedPoints += 0.75; // Add fewer points for partial H1 match
+        titleMatch = 'partial';
+      }
     }
   }
   
@@ -476,16 +570,6 @@ function calculateFidelityScore(originalSchema, canonicalSchema) {
     }
   }
   
-  // Compare heading structure (2 points)
-  totalPoints += 2;
-  const h1Difference = Math.abs(originalSchema.h1Tags - canonicalSchema.h1Tags);
-  const h2Difference = Math.abs(originalSchema.h2Tags - canonicalSchema.h2Tags);
-  if (h1Difference === 0 && h2Difference === 0) {
-    earnedPoints += 2;
-  } else if (h1Difference <= 1 && h2Difference <= 2) {
-    earnedPoints += 1;
-  }
-  
   // Compare content volume (2 points)
   totalPoints += 2;
   const paragraphDifference = Math.abs(originalSchema.paragraphs - canonicalSchema.paragraphs);
@@ -499,28 +583,34 @@ function calculateFidelityScore(originalSchema, canonicalSchema) {
   
   // Compare dates (3 points) - prioritize schema dates
   totalPoints += 3;
+  let dateMatch = false;
+  let publishedDateMatch = false;
+  let modifiedDateMatch = false;
   
-  // First check schema dates (these are most important)
+  // Check published dates from schema
   if (originalSchema.schemaProperties?.datePublished && canonicalSchema.schemaProperties?.datePublished) {
     const schemaOrigDate = new Date(originalSchema.schemaProperties.datePublished);
     const schemaCanonDate = new Date(canonicalSchema.schemaProperties.datePublished);
     
     if (!isNaN(schemaOrigDate) && !isNaN(schemaCanonDate)) {
       if (schemaOrigDate.toISOString() === schemaCanonDate.toISOString()) {
-        earnedPoints += 3; // Exact schema date match
+        earnedPoints += 2; // Exact schema date match
+        publishedDateMatch = true;
       } else if (schemaOrigDate.toDateString() === schemaCanonDate.toDateString()) {
-        earnedPoints += 2; // Same day
+        earnedPoints += 1.5; // Same day
+        publishedDateMatch = 'partial';
       } else {
         const diffTime = Math.abs(schemaOrigDate - schemaCanonDate);
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         
         if (diffDays <= 1) {
-          earnedPoints += 1; // 1 day difference
+          earnedPoints += 0.75; // 1 day difference
+          publishedDateMatch = 'partial';
         }
       }
     }
   } 
-  // Fallback to meta dates if schema dates aren't available
+  // Fallback to meta published dates if schema dates aren't available
   else if (originalSchema.publishedDate && canonicalSchema.publishedDate) {
     const originalDate = new Date(originalSchema.publishedDate);
     const canonicalDate = new Date(canonicalSchema.publishedDate);
@@ -529,14 +619,150 @@ function calculateFidelityScore(originalSchema, canonicalSchema) {
     if (!isNaN(originalDate) && !isNaN(canonicalDate)) {
       // Check if dates are the same date (ignoring time)
       if (originalDate.toDateString() === canonicalDate.toDateString()) {
-        earnedPoints += 2;
+        earnedPoints += 1.5;
+        publishedDateMatch = true;
       } else {
         // Check if dates are within 1 day of each other
         const diffTime = Math.abs(originalDate - canonicalDate);
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         
         if (diffDays <= 1) {
+          earnedPoints += 0.75;
+          publishedDateMatch = 'partial';
+        }
+      }
+    }
+  }
+  
+  // Check modified dates from schema
+  if (originalSchema.schemaProperties?.dateModified && canonicalSchema.schemaProperties?.dateModified) {
+    const schemaOrigModDate = new Date(originalSchema.schemaProperties.dateModified);
+    const schemaCanonModDate = new Date(canonicalSchema.schemaProperties.dateModified);
+    
+    if (!isNaN(schemaOrigModDate) && !isNaN(schemaCanonModDate)) {
+      if (schemaOrigModDate.toISOString() === schemaCanonModDate.toISOString()) {
+        earnedPoints += 1; // Exact modified date match
+        modifiedDateMatch = true;
+      } else if (schemaOrigModDate.toDateString() === schemaCanonModDate.toDateString()) {
+        earnedPoints += 0.5; // Same day
+        modifiedDateMatch = 'partial';
+      }
+    }
+  }
+  // Check meta modified dates
+  else if (originalSchema.modifiedDate && canonicalSchema.modifiedDate) {
+    const originalModDate = new Date(originalSchema.modifiedDate);
+    const canonicalModDate = new Date(canonicalSchema.modifiedDate);
+    
+    if (!isNaN(originalModDate) && !isNaN(canonicalModDate)) {
+      if (originalModDate.toDateString() === canonicalModDate.toDateString()) {
+        earnedPoints += 0.5;
+        modifiedDateMatch = 'partial';
+      }
+    }
+  }
+  
+  // Determine overall date match status
+  if (publishedDateMatch === true && modifiedDateMatch === true) {
+    // Both dates match exactly
+    dateMatch = true;
+    console.log("Date Match: Both dates match exactly");
+  } else if (publishedDateMatch === true || modifiedDateMatch === true) {
+    // At least one date matches exactly
+    dateMatch = true;
+    console.log("Date Match: At least one date matches exactly", { publishedDateMatch, modifiedDateMatch });
+  } else if (publishedDateMatch === 'partial' || modifiedDateMatch === 'partial') {
+    // At least one date partially matches
+    dateMatch = 'partial';
+    console.log("Date Match: Partial match", { publishedDateMatch, modifiedDateMatch });
+  } else {
+    console.log("Date Match: No match", { publishedDateMatch, modifiedDateMatch });
+  }
+  
+  // Cap the total earned points for dates at 3
+  earnedPoints = Math.min(earnedPoints, 3);
+  
+  // Compare authors (2 points)
+  totalPoints += 2;
+  let authorMatch = false;
+  
+  // Check schema authors
+  if (originalSchema.schemaProperties?.authors && canonicalSchema.schemaProperties?.authors) {
+    const originalAuthors = originalSchema.schemaProperties.authors;
+    const canonicalAuthors = canonicalSchema.schemaProperties.authors;
+    
+    if (originalAuthors.length > 0 && canonicalAuthors.length > 0) {
+      // Check for exact author match
+      if (originalAuthors.length === canonicalAuthors.length) {
+        const allMatch = originalAuthors.every(author => 
+          canonicalAuthors.some(canonAuthor => 
+            canonAuthor.toLowerCase() === author.toLowerCase()));
+        
+        if (allMatch) {
+          earnedPoints += 2;
+          authorMatch = true;
+        } else {
+          // Check for partial match (at least one author matches)
+          const someMatch = originalAuthors.some(author => 
+            canonicalAuthors.some(canonAuthor => 
+              canonAuthor.toLowerCase() === author.toLowerCase()));
+          
+          if (someMatch) {
+            earnedPoints += 1;
+            authorMatch = 'partial';
+          } else {
+            // Check for similar author names (partial string matches)
+            const similarMatch = originalAuthors.some(author => 
+              canonicalAuthors.some(canonAuthor => {
+                // Check if author names share significant parts
+                const authorWords = author.toLowerCase().split(/\s+/);
+                const canonAuthorWords = canonAuthor.toLowerCase().split(/\s+/);
+                
+                // Check for any word overlap in names
+                return authorWords.some(word => 
+                  word.length > 2 && canonAuthorWords.some(canonWord => 
+                    canonWord.includes(word) || word.includes(canonWord)
+                  )
+                );
+              })
+            );
+            
+            if (similarMatch) {
+              earnedPoints += 0.5;
+              authorMatch = 'partial';
+            }
+          }
+        }
+      } else {
+        // Different number of authors, check for any overlap
+        const someMatch = originalAuthors.some(author => 
+          canonicalAuthors.some(canonAuthor => 
+            canonAuthor.toLowerCase() === author.toLowerCase()));
+        
+        if (someMatch) {
           earnedPoints += 1;
+          authorMatch = 'partial';
+        } else {
+          // Check for similar author names (partial string matches)
+          const similarMatch = originalAuthors.some(author => 
+            canonicalAuthors.some(canonAuthor => {
+              // Check if author names share significant parts
+              const authorWords = author.toLowerCase().split(/\s+/);
+              const canonAuthorWords = canonAuthor.toLowerCase().split(/\s+/);
+              
+              // Check for any word overlap in names
+              return authorWords.some(word => 
+                word.length > 2 && canonAuthorWords.some(canonWord => 
+                  canonWord.includes(word) || word.includes(canonWord)
+                )
+              );
+            })
+          );
+          
+          if (similarMatch) {
+            earnedPoints += 0.5;
+            authorMatch = 'partial';
+          }
         }
       }
     }
@@ -579,9 +805,10 @@ function calculateFidelityScore(originalSchema, canonicalSchema) {
       totalPoints,
       earnedPoints,
       comparisons: {
-        title: originalSchema.title === canonicalSchema.title,
+        title: titleMatch,
         description: originalSchema.description === canonicalSchema.description,
-        headings: h1Difference === 0 && h2Difference === 0,
+        date: dateMatch,
+        author: authorMatch,
         contentVolume: paragraphRatio
       }
     }

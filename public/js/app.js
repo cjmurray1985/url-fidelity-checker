@@ -92,6 +92,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const originalStats = document.getElementById('original-stats');
   const canonicalStats = document.getElementById('canonical-stats');
   const contentComparisonTable = document.getElementById('content-comparison-table');
+  const dateMatch = document.getElementById('date-match');
+  const authorMatch = document.getElementById('author-match');
   
   // Keyboard shortcut helper
   const keyboardShortcuts = [
@@ -425,16 +427,53 @@ document.addEventListener('DOMContentLoaded', () => {
     const cleanTitle1 = cleanTitle(title1);
     const cleanTitle2 = cleanTitle(title2);
     
-    // Check if cleaned titles match
-    if (cleanTitle1 === cleanTitle2) return { match: true, score: 1, message: "Matches (excluding site names)" };
+    // Calculate similarity score for cleaned titles
+    const calculateSimilarity = (str1, str2) => {
+      if (!str1 || !str2) return 0;
+      
+      // Convert to lowercase and split into words
+      const words1 = str1.toLowerCase().split(/\s+/);
+      const words2 = str2.toLowerCase().split(/\s+/);
+      
+      // Count matching words
+      let matchingWords = 0;
+      for (const word of words1) {
+        if (word.length > 2 && words2.includes(word)) {
+          matchingWords++;
+        }
+      }
+      
+      // Calculate similarity as a percentage
+      return matchingWords / Math.min(words1.length, words2.length);
+    };
     
-    // Check if one is contained in the other
-    if (cleanTitle1.includes(cleanTitle2) || cleanTitle2.includes(cleanTitle1)) {
-      return { match: 'partial', score: 0.8, message: "One title contains the other" };
+    // Check if cleaned titles match - now considered a full match per requirements
+    if (cleanTitle1 === cleanTitle2) {
+      return { match: true, score: 1, message: "Matches (excluding site names)" };
     }
     
-    // Use the more sophisticated text comparison
-    return compareTexts(cleanTitle1, cleanTitle2);
+    // Calculate similarity between cleaned titles
+    const similarity = calculateSimilarity(cleanTitle1, cleanTitle2);
+    
+    if (similarity >= 0.7) {
+      // High similarity (70% or more matching words)
+      return { match: true, score: 0.9, message: `High similarity (${Math.round(similarity * 100)}%)` };
+    } else if (similarity >= 0.5) {
+      // Moderate similarity (50-70% matching words)
+      return { match: 'partial', score: 0.7, message: `Moderate similarity (${Math.round(similarity * 100)}%)` };
+    } else if (cleanTitle1.includes(cleanTitle2) || cleanTitle2.includes(cleanTitle1)) {
+      // One title contains the other but low word similarity
+      return { match: 'partial', score: 0.5, message: "One title contains the other" };
+    }
+    
+    // Low similarity - use the more sophisticated text comparison as fallback
+    const textComparison = compareTexts(cleanTitle1, cleanTitle2);
+    if (textComparison.match === 'partial' && textComparison.score < 0.5) {
+      // Override low partial matches to be mismatches
+      return { match: false, score: textComparison.score, message: `Low similarity (${Math.round(similarity * 100)}%)` };
+    }
+    
+    return textComparison;
   }
   
   // Helper function to compare image URLs
@@ -516,10 +555,33 @@ document.addEventListener('DOMContentLoaded', () => {
     canonicalUrl.textContent = data.canonicalUrl;
     canonicalUrl.href = data.canonicalUrl;
     
+    // Populate schema stats
+    populateSchemaStats(originalStats, data.originalSchema);
+    populateSchemaStats(canonicalStats, data.canonicalSchema);
+    
+    // Populate comparison table first to get date comparison results
+    populateComparisonTable(data);
+    
     // Set comparison details
     setComparisonResult(titleMatch, data.fidelityDetails.comparisons.title);
     setComparisonResult(descriptionMatch, data.fidelityDetails.comparisons.description);
-    setComparisonResult(headingsMatch, data.fidelityDetails.comparisons.headings);
+    
+    // Use the date comparison results from the table for the date card
+    let dateMatchStatus = data.fidelityDetails.comparisons.date;
+    if (window.dateComparisonResults && 
+        window.dateComparisonResults.publishedDate === true && 
+        window.dateComparisonResults.modifiedDate === true) {
+      // If both dates have exact matches in the table, override the server's date match status
+      dateMatchStatus = true;
+    } else if (window.dateComparisonResults && 
+              (window.dateComparisonResults.publishedDate === true || 
+               window.dateComparisonResults.modifiedDate === true)) {
+      // If at least one date has an exact match, consider it a match
+      dateMatchStatus = true;
+    }
+    
+    setComparisonResult(dateMatch, dateMatchStatus);
+    setComparisonResult(authorMatch, data.fidelityDetails.comparisons.author);
     
     // Content volume is a ratio, so we need a different approach
     const contentRatio = data.fidelityDetails.comparisons.contentVolume;
@@ -533,13 +595,6 @@ document.addEventListener('DOMContentLoaded', () => {
       setComparisonResult(contentMatch, false);
       contentMatch.textContent = 'Mismatch';
     }
-    
-    // Populate schema stats
-    populateSchemaStats(originalStats, data.originalSchema);
-    populateSchemaStats(canonicalStats, data.canonicalSchema);
-    
-    // Populate comparison table
-    populateComparisonTable(data);
     
     // Scroll to results
     setTimeout(() => {
@@ -582,9 +637,12 @@ document.addEventListener('DOMContentLoaded', () => {
   function setComparisonResult(element, isMatch) {
     element.className = 'comparison-result';
     
-    if (isMatch) {
+    if (isMatch === true) {
       element.classList.add('match');
       element.textContent = 'Match';
+    } else if (isMatch === 'partial') {
+      element.classList.add('partial');
+      element.textContent = 'Partial Match';
     } else {
       element.classList.add('mismatch');
       element.textContent = 'Mismatch';
@@ -593,30 +651,35 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Populate schema stats
   function populateSchemaStats(container, schema) {
-    // Create stat items
+    container.innerHTML = '';
+    
+    // Add basic stats
     addStatItem(container, 'Title Length', schema.title ? schema.title.length : 0);
     addStatItem(container, 'Description', schema.description ? 'Present' : 'Missing');
     addStatItem(container, 'H1 Tags', schema.h1Tags);
-    addStatItem(container, 'H2 Tags', schema.h2Tags);
     addStatItem(container, 'Paragraphs', schema.paragraphs);
     addStatItem(container, 'Links', schema.links);
     addStatItem(container, 'Images', schema.images);
-    addStatItem(container, 'Meta Tags', schema.metaTags);
-    addStatItem(container, 'Structured Data', schema.jsonLdData.length ? 'Present' : 'Missing');
     
-    // Add date info
+    // Add date stats
     if (schema.publishedDate) {
-      const date = new Date(schema.publishedDate);
-      if (!isNaN(date)) {
-        addStatItem(container, 'Published Date', date.toLocaleString());
-      }
+      addStatItem(container, 'Published Date', new Date(schema.publishedDate).toLocaleString());
+    }
+    if (schema.modifiedDate) {
+      addStatItem(container, 'Modified Date', new Date(schema.modifiedDate).toLocaleString());
     }
     
-    if (schema.modifiedDate) {
-      const date = new Date(schema.modifiedDate);
-      if (!isNaN(date)) {
-        addStatItem(container, 'Modified Date', date.toLocaleString());
-      }
+    // Add author stats if available
+    if (schema.schemaProperties?.authors && schema.schemaProperties.authors.length > 0) {
+      addStatItem(container, 'Authors', schema.schemaProperties.authors.join(', '));
+    }
+    
+    // Add schema type if available
+    if (schema.schemaProperties?.type) {
+      const type = Array.isArray(schema.schemaProperties.type) 
+        ? schema.schemaProperties.type.join(', ') 
+        : schema.schemaProperties.type;
+      addStatItem(container, 'Schema Type', type);
     }
   }
   
@@ -646,8 +709,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const originalSchema = data.originalSchema;
     const canonicalSchema = data.canonicalSchema;
     
+    // Track date comparison results for summary card
+    window.dateComparisonResults = {
+      publishedDate: null,
+      modifiedDate: null
+    };
+    
     // Add Title comparison
     addTitleComparisonRow();
+    
+    // Add H1 Heading comparison
+    addTextComparisonRow('Main Heading (H1)', originalSchema.h1Content, canonicalSchema.h1Content);
     
     // Add Meta Description comparison
     addTextComparisonRow('Meta Description', originalSchema.description, canonicalSchema.description);
@@ -657,16 +729,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     addDateComparisonRow('Modified Date', originalSchema.modifiedDate, canonicalSchema.modifiedDate);
 
-    // Add Main Heading comparison
-    addTextComparisonRow('Main Heading (H1)', originalSchema.h1Content, canonicalSchema.h1Content);
-    
-    // Add Subheadings comparisons
-    for (let i = 0; i < Math.max(originalSchema.h2Contents?.length || 0, canonicalSchema.h2Contents?.length || 0); i++) {
-      const originalH2 = originalSchema.h2Contents?.[i] || '';
-      const canonicalH2 = canonicalSchema.h2Contents?.[i] || '';
-      addTextComparisonRow(`Subheading ${i+1} (H2)`, originalH2, canonicalH2);
-    }
-    
     // Add First Paragraph comparison
     addTextComparisonRow('First Paragraph', originalSchema.firstParagraph, canonicalSchema.firstParagraph, true);
     
@@ -781,10 +843,16 @@ document.addEventListener('DOMContentLoaded', () => {
         titleComparison.match === true ? 'status-match' : 
         titleComparison.match === 'partial' ? 'status-partial' : 
         'status-mismatch';
-      statusCell.textContent = titleComparison.message || 
-        (titleComparison.match === true ? 'Match' : 
-         titleComparison.match === 'partial' ? 'Partial Match' : 
-         'Mismatch');
+      
+      // Update status message to be more descriptive
+      if (titleComparison.match === true && titleComparison.message && titleComparison.message.includes('excluding site names')) {
+        statusCell.textContent = 'Match (excluding site names)';
+      } else {
+        statusCell.textContent = titleComparison.message || 
+          (titleComparison.match === true ? 'Match' : 
+           titleComparison.match === 'partial' ? 'Partial Match' : 
+           'Mismatch');
+      }
       
       row.appendChild(elementCell);
       row.appendChild(originalCell);
@@ -825,9 +893,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const statusCell = document.createElement('td');
       statusCell.style.width = "10%";
       
+      let matchStatus = false;
+      
       if (!originalDate || !canonicalDate) {
         statusCell.className = 'status-mismatch';
         statusCell.textContent = 'Missing Date';
+        matchStatus = false;
       } else {
         try {
           const date1 = new Date(originalDate);
@@ -836,10 +907,12 @@ document.addEventListener('DOMContentLoaded', () => {
           if (isNaN(date1.getTime()) || isNaN(date2.getTime())) {
             statusCell.className = 'status-mismatch';
             statusCell.textContent = 'Invalid Date';
+            matchStatus = false;
           } else if (date1.toISOString() === date2.toISOString()) {
             // Exact match (including time)
             statusCell.className = 'status-match';
             statusCell.textContent = 'Exact Match';
+            matchStatus = true;
           } else if (date1.toDateString() === date2.toDateString()) {
             // Same day match
             const timeDiff = Math.abs(date1 - date2) / (1000 * 60); // difference in minutes
@@ -847,12 +920,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (timeDiff < 1) {
               statusCell.className = 'status-match';
               statusCell.textContent = 'Exact Match';
+              matchStatus = true;
             } else if (timeDiff < 60) {
               statusCell.className = 'status-partial';
               statusCell.textContent = `Same Day (${Math.round(timeDiff)}min diff)`;
+              matchStatus = 'partial';
             } else {
               statusCell.className = 'status-partial';
               statusCell.textContent = `Same Day (${Math.round(timeDiff/60)}hr diff)`;
+              matchStatus = 'partial';
             }
           } else {
             // Different days
@@ -861,10 +937,20 @@ document.addEventListener('DOMContentLoaded', () => {
             
             statusCell.className = 'status-mismatch';
             statusCell.textContent = `${diffDays} day(s) difference`;
+            matchStatus = false;
           }
+          
+          // Store the match status for the summary card
+          if (label === 'Published Date') {
+            window.dateComparisonResults.publishedDate = matchStatus;
+          } else if (label === 'Modified Date') {
+            window.dateComparisonResults.modifiedDate = matchStatus;
+          }
+          
         } catch (e) {
           statusCell.className = 'status-mismatch';
           statusCell.textContent = 'Date Comparison Error';
+          matchStatus = false;
         }
       }
       
@@ -1016,13 +1102,82 @@ document.addEventListener('DOMContentLoaded', () => {
           // Date comparison
           addDateComparisonRow(prop.name, originalValue, canonicalValue);
         } else if (prop.isImage) {
-          // Image comparison (simple text for now)
-          addTextComparisonRow(prop.name, originalValue || 'No image', canonicalValue || 'No image');
+          // Image comparison with preview
+          addImageSchemaComparisonRow(prop.name, originalValue, canonicalValue);
         } else {
           // Regular text comparison
           addTextComparisonRow(prop.name, originalValue, canonicalValue);
         }
       });
+    }
+    
+    // Add image schema comparison row with preview
+    function addImageSchemaComparisonRow(label, originalImage, canonicalImage) {
+      if (!originalImage && !canonicalImage) return;
+      
+      const row = document.createElement('tr');
+      
+      const elementCell = document.createElement('td');
+      elementCell.textContent = label;
+      elementCell.style.width = "20%";
+      elementCell.style.maxWidth = "150px";
+      
+      const originalCell = document.createElement('td');
+      originalCell.style.width = "35%";
+      originalCell.className = 'truncate expand-content';
+      if (originalImage) {
+        try {
+          const imgPreview = document.createElement('div');
+          imgPreview.style.marginBottom = '5px';
+          imgPreview.innerHTML = `<img src="${originalImage}" alt="Preview" style="max-width: 100px; max-height: 60px;">`;
+          originalCell.appendChild(imgPreview);
+          originalCell.appendChild(document.createTextNode(originalImage));
+        } catch (e) {
+          originalCell.textContent = originalImage;
+        }
+      } else {
+        originalCell.textContent = 'Not found';
+      }
+      
+      const canonicalCell = document.createElement('td');
+      canonicalCell.style.width = "35%";
+      canonicalCell.className = 'truncate expand-content';
+      if (canonicalImage) {
+        try {
+          const imgPreview = document.createElement('div');
+          imgPreview.style.marginBottom = '5px';
+          imgPreview.innerHTML = `<img src="${canonicalImage}" alt="Preview" style="max-width: 100px; max-height: 60px;">`;
+          canonicalCell.appendChild(imgPreview);
+          canonicalCell.appendChild(document.createTextNode(canonicalImage));
+        } catch (e) {
+          canonicalCell.textContent = canonicalImage;
+        }
+      } else {
+        canonicalCell.textContent = 'Not found';
+      }
+      
+      const imageComparison = compareImageUrls(originalImage, canonicalImage);
+      
+      const statusCell = document.createElement('td');
+      statusCell.style.width = "10%";
+      statusCell.className = imageComparison.match ? 'status-match' : 'status-mismatch';
+      statusCell.textContent = imageComparison.message || (imageComparison.match ? 'Similar Images' : 'Different Images');
+      
+      row.appendChild(elementCell);
+      row.appendChild(originalCell);
+      row.appendChild(canonicalCell);
+      row.appendChild(statusCell);
+      
+      // Add fade-in effect with delay
+      row.style.opacity = 0;
+      row.style.transition = 'opacity 0.5s ease';
+      
+      const delay = tableBody.children.length * 50;
+      setTimeout(() => {
+        row.style.opacity = 1;
+      }, delay);
+      
+      tableBody.appendChild(row);
     }
   }
 });
